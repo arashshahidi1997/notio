@@ -1,0 +1,377 @@
+from __future__ import annotations
+
+import ast
+from dataclasses import dataclass
+from datetime import date, datetime
+from pathlib import Path
+from string import Template
+from typing import Any
+import getpass
+import re
+
+from notio.config import Config, NoteTypeConfig
+
+
+FRONTMATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
+ROOT_INDEX_TITLE = "Project Logs"
+
+
+DEFAULT_TEMPLATES: dict[str, str] = {
+    "commit.md": """---
+title: "${title}"
+date: ${date}
+timestamp: ${timestamp}
+tags: [commit]
+---
+
+# ${title}
+
+## Summary
+- 
+
+## Details
+- 
+""",
+    "daily.md": """---
+title: "${title}"
+date: ${date}
+timestamp: ${timestamp}
+tags: [daily]
+---
+
+# ${date}
+
+## Tasks
+- [ ]
+
+## Done
+- [ ]
+
+## Notes
+- 
+""",
+    "idea.md": """---
+title: "${title}"
+date: ${date}
+timestamp: ${timestamp}
+tags: [idea]
+---
+
+# ${title}
+
+## Overview
+- 
+
+## Tasks
+- [ ]
+
+## Notes
+- 
+""",
+    "issue.md": """---
+title: "${title}"
+status: open
+created: ${date}
+updated: ${date}
+timestamp: ${timestamp}
+tags: [issue]
+---
+
+# ${title}
+
+## Summary
+- 
+
+## Context
+- 
+
+## Tasks
+- [ ]
+
+## Notes
+- 
+""",
+    "meeting.md": """---
+title: "${title}"
+date: ${date}
+timestamp: ${timestamp}
+participants: []
+tags: [meeting]
+---
+
+# ${title} - ${date}
+
+## Notes
+- 
+
+## Action Items
+- [ ]
+""",
+    "personal.md": """---
+title: "${title}"
+date: ${date}
+timestamp: ${timestamp}
+tags: [personal]
+---
+
+# ${title}
+
+## Notes
+- 
+""",
+    "weekly.md": """---
+title: "${title}"
+week: ${year}-W${week}
+timestamp: ${timestamp}
+tags: [weekly]
+---
+
+# Week ${year}-W${week}
+
+## Highlights
+- 
+
+## Completed
+- 
+
+## Next
+- 
+""",
+}
+
+
+@dataclass(frozen=True)
+class NoteContext:
+    owner: str
+    title: str
+    when: date
+    timestamp: str
+
+    @property
+    def template_vars(self) -> dict[str, str]:
+        week = self.when.strftime("%V")
+        year = self.when.strftime("%Y")
+        month = self.when.strftime("%m")
+        day = self.when.strftime("%d")
+        iso_date = self.when.isoformat()
+        values = {
+            "owner": self.owner,
+            "title": self.title,
+            "date": iso_date,
+            "timestamp": self.timestamp,
+            "year": year,
+            "month": month,
+            "day": day,
+            "week": week,
+            "datetime": f"{iso_date}T{self.timestamp}",
+            "FOAM_TITLE": self.title,
+            "FOAM_DATE_YEAR": year,
+            "FOAM_DATE_MONTH": month,
+            "FOAM_DATE_DATE": day,
+            "FOAM_DATE_WEEK": week,
+            "FOAM_TIMESTAMP": self.timestamp,
+        }
+        return values
+
+
+def default_owner() -> str:
+    return getpass.getuser()
+
+
+def parse_date(value: str | None) -> date:
+    if value is None:
+        return date.today()
+    return date.fromisoformat(value)
+
+
+def make_timestamp(now: datetime | None = None) -> str:
+    current = now or datetime.now()
+    return current.strftime("%Y%m%d-%H%M%S-%f")
+
+
+def default_title(note_name: str, when: date) -> str:
+    if note_name == "daily":
+        return f"Daily {when.isoformat()}"
+    if note_name == "weekly":
+        return f"Week {when.strftime('%Y')}-W{when.strftime('%V')}"
+    return note_name
+
+
+def ensure_default_templates(config: Config, *, force: bool = False) -> list[Path]:
+    config.template_root.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for template_name, content in DEFAULT_TEMPLATES.items():
+        path = config.template_root / template_name
+        if path.exists() and not force:
+            continue
+        path.write_text(content, encoding="utf-8")
+        written.append(path)
+    return written
+
+
+def ensure_note_dirs(config: Config) -> list[Path]:
+    created: list[Path] = []
+    config.notes_root.mkdir(parents=True, exist_ok=True)
+    created.append(config.notes_root)
+    for note_type in config.note_types:
+        folder = config.notes_root / note_type
+        folder.mkdir(parents=True, exist_ok=True)
+        created.append(folder)
+    return created
+
+
+def render_template(template_text: str, values: dict[str, str]) -> str:
+    return Template(template_text).safe_substitute(values)
+
+
+def build_note_path(config: Config, note_type: NoteTypeConfig, context: NoteContext) -> Path:
+    values = context.template_vars
+    return config.notes_root / note_type.name / note_type.filename.format(**values)
+
+
+def create_note(
+    config: Config,
+    note_name: str,
+    *,
+    owner: str | None = None,
+    title: str | None = None,
+    note_date: str | None = None,
+    timestamp: str | None = None,
+    force: bool = False,
+) -> Path:
+    note_type = config.note_types[note_name]
+    when = parse_date(note_date)
+    resolved_owner = owner or default_owner()
+    resolved_title = title or default_title(note_name, when)
+    resolved_timestamp = timestamp or make_timestamp()
+    context = NoteContext(
+        owner=resolved_owner,
+        title=resolved_title,
+        when=when,
+        timestamp=resolved_timestamp,
+    )
+    path = build_note_path(config, note_type, context)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and not force and note_type.mode == "event":
+        raise FileExistsError(f"Refusing to overwrite existing event note: {path}")
+
+    template_path = config.template_root / note_type.template
+    if not template_path.exists():
+        raise FileNotFoundError(f"Missing template: {template_path}")
+
+    rendered = render_template(template_path.read_text(encoding="utf-8"), context.template_vars)
+    path.write_text(rendered, encoding="utf-8")
+    build_type_index(config, note_name)
+    build_root_index(config)
+    return path
+
+
+def _parse_scalar(raw: str) -> Any:
+    value = raw.strip()
+    if value == "":
+        return ""
+    lowered = value.lower()
+    if lowered in {"true", "false"}:
+        return lowered == "true"
+    if lowered in {"null", "none"}:
+        return None
+    if value[0] in "\"'[":
+        try:
+            return ast.literal_eval(value)
+        except (ValueError, SyntaxError):
+            return value.strip("\"'")
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, SyntaxError):
+        return value
+
+
+def parse_frontmatter(text: str) -> dict[str, Any]:
+    match = FRONTMATTER_RE.match(text)
+    if not match:
+        return {}
+    meta: dict[str, Any] = {}
+    for line in match.group(1).splitlines():
+        if ":" not in line:
+            continue
+        key, raw_value = line.split(":", 1)
+        meta[key.strip()] = _parse_scalar(raw_value)
+    return meta
+
+
+def _format_meta_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value)
+    return str(value)
+
+
+def _entry_label(path: Path, metadata: dict[str, Any], keys: tuple[str, ...]) -> str:
+    if not keys:
+        return path.stem
+    extras = " ".join(
+        f"{key}:{_format_meta_value(metadata.get(key))}"
+        for key in keys
+        if _format_meta_value(metadata.get(key))
+    )
+    return f"{path.stem} {extras}".rstrip()
+
+
+def build_type_index(config: Config, note_name: str) -> Path:
+    note_type = config.note_types[note_name]
+    folder = config.notes_root / note_name
+    folder.mkdir(parents=True, exist_ok=True)
+    files = sorted(
+        [
+            path
+            for path in folder.iterdir()
+            if path.is_file() and path.name != "index.md" and path.name.startswith(note_name)
+        ],
+        reverse=True,
+    )
+
+    lines = [f"# {note_name.capitalize()}", ""]
+    if note_type.toc_groupby:
+        grouped: dict[str, list[tuple[Path, dict[str, Any]]]] = {}
+        for path in files:
+            meta = parse_frontmatter(path.read_text(encoding="utf-8"))
+            group = _format_meta_value(meta.get(note_type.toc_groupby)) or "unset"
+            grouped.setdefault(group, []).append((path, meta))
+        for group in sorted(grouped):
+            lines.append(f"## {note_type.toc_groupby}: {group}")
+            lines.append("")
+            for path, meta in grouped[group]:
+                lines.append(f"- [{_entry_label(path, meta, note_type.toc_keys)}]({path.name})")
+            lines.append("")
+    else:
+        lines.append("## Contents")
+        lines.append("")
+        for path in files:
+            meta = parse_frontmatter(path.read_text(encoding="utf-8"))
+            lines.append(f"- [{_entry_label(path, meta, note_type.toc_keys)}]({path.name})")
+    lines.append("")
+    index_path = folder / "index.md"
+    index_path.write_text("\n".join(lines), encoding="utf-8")
+    return index_path
+
+
+def build_root_index(config: Config) -> Path:
+    lines = [f"# {ROOT_INDEX_TITLE}", "", "## Contents", ""]
+    for note_name in sorted(config.note_types):
+        lines.append(f"- [{note_name.capitalize()}]({note_name}/index.md)")
+    lines.append("")
+    index_path = config.notes_root / "index.md"
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text("\n".join(lines), encoding="utf-8")
+    return index_path
+
+
+def init_workspace(config: Config, *, force: bool = False) -> list[Path]:
+    created: list[Path] = []
+    created.extend(ensure_note_dirs(config))
+    created.extend(ensure_default_templates(config, force=force))
+    created.append(build_root_index(config))
+    for note_name in config.note_types:
+        created.append(build_type_index(config, note_name))
+    return created

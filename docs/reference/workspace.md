@@ -24,3 +24,23 @@ project/
 
 The exact paths are configurable, but this is the default model `notio` scaffolds.
 
+## Diataxis layout
+
+Running `notio diataxis init` adds:
+
+```text
+project/
+  docs/
+    index.md
+    tutorials/
+      index.md
+    how-to/
+      index.md
+    explanation/
+      index.md
+    reference/
+      index.md
+```
+
+Pages added with `notio diataxis add` appear within the appropriate section directory.
+

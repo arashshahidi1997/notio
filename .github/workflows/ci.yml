@@ -16,13 +16,18 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          python -m pip install .
+          python -m pip install ".[dev]"
       - name: Syntax check
         run: |
-          python -m py_compile src/notio/__init__.py src/notio/__main__.py src/notio/config.py src/notio/core.py src/notio/cli.py
+          python -m py_compile src/notio/__init__.py src/notio/__main__.py src/notio/config.py src/notio/core.py src/notio/cli.py src/notio/diataxis.py src/notio/query.py src/notio/mcp/common.py
+      - name: Test suite
+        run: |
+          python -m pytest
       - name: CLI smoke test
         run: |
           mkdir -p /tmp/notio-ci
           notio --root /tmp/notio-ci init --write-config
           notio --root /tmp/notio-ci note meeting --title "CI smoke test"
           test -f /tmp/notio-ci/docs/log/meeting/index.md
+          notio --root /tmp/notio-ci diataxis init
+          test -f /tmp/notio-ci/docs/tutorials/index.md

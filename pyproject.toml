@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +9,7 @@ description = "Lightweight project-agnostic CLI for templated notes and log inde
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
-  { name = "Arash" }
+  { name = "Arash Shahidi" }
 ]
 license = { text = "MIT" }
 keywords = ["notes", "markdown", "cli", "templates", "logs"]
@@ -29,9 +29,20 @@ docs = [
   "mkdocs>=1.6",
   "mkdocs-material>=9.5",
 ]
+mcp = [
+  "fastmcp",
+]
+dev = [
+  "pytest",
+  "build",
+  "twine",
+  "mkdocs>=1.6",
+  "mkdocs-material>=9.5",
+]
 
 [project.scripts]
 notio = "notio.cli:main"
+notio-mcp = "notio.mcp.server:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

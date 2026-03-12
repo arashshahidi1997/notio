@@ -41,3 +41,32 @@ toc_groupby = "status"
 - `toc_keys`
 - `toc_groupby`
 
+## Diataxis section
+
+The optional `[diataxis]` section configures the Diataxis documentation scaffolding.
+
+```toml
+[diataxis]
+docs_root = "docs"
+sections = ["tutorials", "how-to", "explanation", "reference"]
+```
+
+- `docs_root`: directory for documentation output (default `"docs"`)
+- `sections`: list of Diataxis sections to manage (default: all four standard sections)
+
+When omitted, `notio diataxis` commands use the defaults above.
+
+## MCP dependencies
+
+The MCP server is an optional feature. Install with:
+
+```bash
+pip install notio[mcp]
+```
+
+This pulls in `fastmcp` as a dependency.
+
+## Environment variables
+
+- `NOTIO_ROOT`: project root for the MCP server (default: current directory). Set automatically when using `notio mcp --root <path>`.
+

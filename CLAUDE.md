@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**notio** is a lightweight CLI for creating templated Markdown notes and maintaining browsable log indexes. Notes are plain Markdown with YAML frontmatter, configured entirely via TOML. No database or external runtime dependencies — only Python 3.11+ stdlib.
+**notio** is a lightweight CLI for creating templated Markdown notes and maintaining browsable log indexes. Notes are plain Markdown with YAML frontmatter, configured entirely via TOML. No database or external runtime dependencies — only Python 3.11+ stdlib (MCP server requires `fastmcp` as optional dependency).
 
 ## Common Commands
 
 ```bash
 # Install for development
-pip install .
+pip install -e ".[dev]"
 
 # Run locally without installing
 PYTHONPATH=src python -m notio --root . <command>
@@ -22,6 +22,15 @@ notio toc [<type>|--all]                # Regenerate indexes
 notio diataxis init [--mkdocs]         # Scaffold Diataxis docs structure
 notio diataxis add <section> <slug>    # Add a page to a section
 notio diataxis toc [<section>|--all]   # Rebuild section indexes
+notio mcp                              # Start FastMCP server (stdio)
+
+# Testing and building
+make test                               # Run pytest
+make build                              # Build wheel and sdist
+make check                              # twine check
+make clean                              # Remove build artifacts
+make publish                            # Upload to PyPI
+make publish-test                       # Upload to TestPyPI
 
 # Documentation
 pip install ".[docs]"
@@ -33,16 +42,16 @@ make note-weekly
 make toc-all
 ```
 
-There is no formal test suite. CI runs a smoke test: init, create a note, verify index generation.
-
 ## Architecture
 
-Four source modules in `src/notio/`:
+Source modules in `src/notio/`:
 
 - **cli.py** — argparse command router, entry point (`notio.cli:main`)
 - **config.py** — TOML config loading into dataclasses. Config precedence: `notio.toml` > `[tool.notio]` in `pyproject.toml` > hardcoded defaults
 - **core.py** — Note business logic: template rendering (`string.Template` with `${variable}` syntax), frontmatter parsing (regex + YAML), note file creation, and index generation
 - **diataxis.py** — Diataxis documentation scaffolding: section templates, page creation, and section index generation. Reuses `core.parse_frontmatter`
+- **query.py** — Read-only note query functions (`list_notes`, `latest_note`, `read_note`). Exported from `notio.__init__` for library use by projio
+- **mcp/** — FastMCP server package (optional, requires `fastmcp`). Exposes all notio operations as MCP tools. Uses `NOTIO_ROOT` env var for project root resolution
 
 Note types have two modes:
 - **period** (e.g. `daily`, `weekly`) — reusable files keyed by date/week

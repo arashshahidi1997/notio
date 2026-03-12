@@ -29,6 +29,8 @@ nav:
       - Create Notes: how-to/create-notes.md
       - Customize Templates: how-to/templates.md
       - Maintain Indexes: how-to/indexes.md
+      - Set Up Diataxis Documentation: how-to/diataxis.md
+      - Use The MCP Server: how-to/mcp.md
   - Explanation:
       - explanation/index.md
       - Scope And Goals: explanation/scope.md

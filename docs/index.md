@@ -8,6 +8,8 @@ It helps a project create and maintain a repo-local notes workspace with:
 - predictable file naming
 - template-driven Markdown generation
 - repo-local index pages for note folders
+- Diataxis documentation scaffolding
+- MCP server for agent integration
 - thin Make wrappers when a project wants them
 
 The docs follow the Diataxis structure:
@@ -23,4 +25,5 @@ Start here:
 - [Initialize a workspace](how-to/init.md)
 - [Create notes](how-to/create-notes.md)
 - [CLI reference](reference/cli.md)
+- [Set up Diataxis docs](how-to/diataxis.md)
 

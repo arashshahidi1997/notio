@@ -53,6 +53,9 @@ def build_parser() -> argparse.ArgumentParser:
     dx_toc.add_argument("section", nargs="?", help="Section to rebuild (default: all)")
     dx_toc.add_argument("--all", action="store_true", help="Rebuild all section indexes")
 
+    # -- mcp subcommand --
+    subparsers.add_parser("mcp", help="Start the FastMCP server (stdio)")
+
     return parser
 
 
@@ -106,6 +109,13 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(f"Unknown note type: {args.type}")
         print(build_type_index(config, args.type))
         print(build_root_index(config))
+        return 0
+
+    if args.command == "mcp":
+        import os
+        os.environ.setdefault("NOTIO_ROOT", str(root))
+        from notio.mcp.server import main as mcp_main
+        mcp_main()
         return 0
 
     if args.command == "diataxis":

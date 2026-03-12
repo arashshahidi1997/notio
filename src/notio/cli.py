@@ -7,6 +7,7 @@ import sys
 from notio import __version__
 from notio.config import DEFAULT_CONFIG_TEXT, load_config
 from notio.core import build_root_index, build_type_index, create_note, init_workspace
+from notio.diataxis import diataxis_add, diataxis_init, diataxis_toc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,6 +36,22 @@ def build_parser() -> argparse.ArgumentParser:
     toc_parser = subparsers.add_parser("toc", help="Regenerate indexes")
     toc_parser.add_argument("type", nargs="?", help="Configured note type")
     toc_parser.add_argument("--all", action="store_true", help="Regenerate every configured note index")
+
+    # -- diataxis subcommand group --
+    diataxis_parser = subparsers.add_parser("diataxis", help="Manage Diataxis documentation structure")
+    diataxis_sub = diataxis_parser.add_subparsers(dest="diataxis_command", required=True)
+
+    dx_init = diataxis_sub.add_parser("init", help="Scaffold Diataxis docs directories and index files")
+    dx_init.add_argument("--mkdocs", action="store_true", help="Print suggested mkdocs.yml nav snippet")
+
+    dx_add = diataxis_sub.add_parser("add", help="Add a page to a Diataxis section")
+    dx_add.add_argument("section", help="Section: tutorials, how-to, explanation, reference")
+    dx_add.add_argument("slug", help="Filename slug (e.g. quickstart)")
+    dx_add.add_argument("--title", help="Page title (defaults to slug)")
+
+    dx_toc = diataxis_sub.add_parser("toc", help="Regenerate Diataxis section indexes")
+    dx_toc.add_argument("section", nargs="?", help="Section to rebuild (default: all)")
+    dx_toc.add_argument("--all", action="store_true", help="Rebuild all section indexes")
 
     return parser
 
@@ -90,6 +107,26 @@ def main(argv: list[str] | None = None) -> int:
         print(build_type_index(config, args.type))
         print(build_root_index(config))
         return 0
+
+    if args.command == "diataxis":
+        if args.diataxis_command == "init":
+            created, snippet = diataxis_init(config, mkdocs=args.mkdocs)
+            for path in created:
+                print(path)
+            if snippet:
+                print()
+                print(snippet)
+            return 0
+        if args.diataxis_command == "add":
+            path = diataxis_add(config, args.section, args.slug, title=args.title)
+            print(path)
+            return 0
+        if args.diataxis_command == "toc":
+            section = args.section if args.section and not args.all else None
+            paths = diataxis_toc(config, section)
+            for path in paths:
+                print(path)
+            return 0
 
     parser.print_help(sys.stderr)
     return 2

@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+src/notio/__init__.py
+src/notio/__main__.py
+src/notio/cli.py
+src/notio/config.py
+src/notio/core.py
+src/notio.egg-info/PKG-INFO
+src/notio.egg-info/SOURCES.txt
+src/notio.egg-info/dependency_links.txt
+src/notio.egg-info/entry_points.txt
+src/notio.egg-info/requires.txt
+src/notio.egg-info/top_level.txt

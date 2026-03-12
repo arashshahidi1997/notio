@@ -1,0 +1,44 @@
+site_name: notio
+site_description: Lightweight project-agnostic CLI for templated notes and log indexes
+site_url: https://arashshahidi1997.github.io/notio/
+repo_url: https://github.com/arashshahidi1997/notio
+repo_name: arashshahidi1997/notio
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - tutorials/index.md
+      - Quickstart: tutorials/quickstart.md
+      - Existing Repo Walkthrough: tutorials/existing-repo.md
+  - How-To Guides:
+      - how-to/index.md
+      - Initialize A Workspace: how-to/init.md
+      - Create Notes: how-to/create-notes.md
+      - Customize Templates: how-to/templates.md
+      - Maintain Indexes: how-to/indexes.md
+  - Explanation:
+      - explanation/index.md
+      - Scope And Goals: explanation/scope.md
+      - Project Model: explanation/project-model.md
+      - Why Config-First: explanation/config-first.md
+  - Log:
+      - log/index.md
+  - Reference:
+      - reference/index.md
+      - CLI: reference/cli.md
+      - Configuration: reference/configuration.md
+      - Workspace Layout: reference/workspace.md
+

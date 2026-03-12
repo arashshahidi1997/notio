@@ -1,3 +1,24 @@
+Metadata-Version: 2.4
+Name: notio
+Version: 0.1.0
+Summary: Lightweight project-agnostic CLI for templated notes and log indexes
+Author: Arash
+License: MIT
+Keywords: notes,markdown,cli,templates,logs
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Topic :: Office/Business :: Groupware
+Classifier: Topic :: Text Processing :: Markup :: Markdown
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Provides-Extra: docs
+Requires-Dist: mkdocs>=1.6; extra == "docs"
+Requires-Dist: mkdocs-material>=9.5; extra == "docs"
+
 # notio
 
 `notio` is a lightweight, project-agnostic CLI for creating templated Markdown notes and maintaining browsable log indexes.

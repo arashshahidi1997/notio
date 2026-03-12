@@ -49,7 +49,17 @@ mode = "event"
 template = "personal.md"
 filename = "personal-{owner}-{timestamp}.md"
 toc_keys = ["title"]
+
+# [diataxis]
+# docs_root = "docs"
+# sections = ["tutorials", "how-to", "explanation", "reference"]
 """
+
+
+@dataclass(frozen=True)
+class DiataxisConfig:
+    docs_root: str = "docs"
+    sections: tuple[str, ...] = ("tutorials", "how-to", "explanation", "reference")
 
 
 @dataclass(frozen=True)
@@ -68,6 +78,7 @@ class Config:
     notes_root: Path
     template_root: Path
     note_types: dict[str, NoteTypeConfig]
+    diataxis: DiataxisConfig
 
 
 def _default_mapping() -> dict:
@@ -113,10 +124,17 @@ def load_config(root: Path) -> Config:
         )
         for name, entry in raw["types"].items()
     }
+    raw_dx = raw.get("diataxis", {})
+    diataxis = DiataxisConfig(
+        docs_root=raw_dx.get("docs_root", "docs"),
+        sections=tuple(raw_dx.get("sections", ["tutorials", "how-to", "explanation", "reference"])),
+    )
+
     return Config(
         root=root,
         notes_root=notes_root,
         template_root=template_root,
         note_types=note_types,
+        diataxis=diataxis,
     )
 

@@ -69,12 +69,4 @@ publish:
 publish-test:
 	$(PUBLISH) --test
 
-# ---- datalad ----------------------------------------------------------------
-
-save:
-	$(DATALAD) save -m "notio"
-
-push:
-	$(DATALAD) push --to github
-
 -include .projio/projio.mk

@@ -27,3 +27,4 @@ Start here:
 - [CLI reference](reference/cli.md)
 - [Set up Diataxis docs](how-to/diataxis.md)
 
+For ecosystem cross-links, see [Ecosystem Links](explanation/ecosystem-links.md).

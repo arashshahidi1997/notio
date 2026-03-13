@@ -33,6 +33,7 @@ nav:
       - Use The MCP Server: how-to/mcp.md
   - Explanation:
       - explanation/index.md
+      - Ecosystem Links: explanation/ecosystem-links.md
       - Scope And Goals: explanation/scope.md
       - Project Model: explanation/project-model.md
       - Why Config-First: explanation/config-first.md
@@ -43,4 +44,3 @@ nav:
       - CLI: reference/cli.md
       - Configuration: reference/configuration.md
       - Workspace Layout: reference/workspace.md
-

@@ -76,3 +76,5 @@ save:
 
 push:
 	$(DATALAD) push --to github
+
+-include .projio/projio.mk

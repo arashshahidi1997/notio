@@ -32,6 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
     note_parser.add_argument("--date", dest="note_date")
     note_parser.add_argument("--timestamp")
     note_parser.add_argument("--force", action="store_true", help="Allow overwriting period notes or existing paths")
+    note_parser.add_argument("--source", help="Capture source (e.g. telegram-voice, cli-text)")
+    note_parser.add_argument("--transcript", help="Raw transcript text")
+    note_parser.add_argument("--summary", help="Summary text")
+    note_parser.add_argument("--project", help="Source project id (stored in frontmatter)")
+    note_parser.add_argument("--metadata", help="JSON string of extra frontmatter fields")
+    note_parser.add_argument("--body", help="Note body (replaces template body)")
 
     toc_parser = subparsers.add_parser("toc", help="Regenerate indexes")
     toc_parser.add_argument("type", nargs="?", help="Configured note type")
@@ -57,6 +63,40 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("mcp", help="Start the FastMCP server (stdio)")
 
     return parser
+
+
+def _build_extra_frontmatter(args: argparse.Namespace) -> dict:
+    """Collect extra frontmatter from CLI args."""
+    import json
+    fm: dict = {}
+    if getattr(args, "source", None):
+        fm["source"] = args.source
+    if getattr(args, "project", None):
+        fm["project_primary"] = args.project
+    md = getattr(args, "metadata", None)
+    if md:
+        fm.update(json.loads(md))
+    return fm
+
+
+def _build_note_body(args: argparse.Namespace) -> str | None:
+    """Build note body from transcript/summary/body args."""
+    body = getattr(args, "body", None)
+    if body:
+        return body
+    transcript = getattr(args, "transcript", None)
+    summary = getattr(args, "summary", None)
+    if not transcript and not summary:
+        return None
+    parts = [f"# {args.title or args.type}\n"]
+    if transcript:
+        parts.append("## Transcript\n")
+        parts.append(transcript + "\n")
+    if summary:
+        parts.append("## Summary\n")
+        parts.append(summary + "\n")
+    parts.append("## Follow-up\n- \n")
+    return "\n".join(parts)
 
 
 def maybe_write_default_config(root: Path) -> Path | None:
@@ -87,6 +127,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "note":
         if args.type not in config.note_types:
             parser.error(f"Unknown note type: {args.type}")
+        extra_fm = _build_extra_frontmatter(args)
+        body = _build_note_body(args)
         path = create_note(
             config,
             args.type,
@@ -95,6 +137,8 @@ def main(argv: list[str] | None = None) -> int:
             note_date=args.note_date,
             timestamp=args.timestamp,
             force=args.force,
+            extra_frontmatter=extra_fm or None,
+            body=body,
         )
         print(path)
         return 0

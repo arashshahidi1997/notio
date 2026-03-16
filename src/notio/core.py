@@ -238,7 +238,15 @@ def create_note(
     note_date: str | None = None,
     timestamp: str | None = None,
     force: bool = False,
+    extra_frontmatter: dict[str, Any] | None = None,
+    body: str | None = None,
 ) -> Path:
+    """Create a note from template.
+
+    If *body* is provided, it replaces the template body (everything after
+    the frontmatter closing ``---``).  Extra frontmatter fields are appended
+    inside the ``---`` block.
+    """
     note_type = config.note_types[note_name]
     when = parse_date(note_date)
     resolved_owner = owner or default_owner()
@@ -260,10 +268,62 @@ def create_note(
         raise FileNotFoundError(f"Missing template: {template_path}")
 
     rendered = render_template(template_path.read_text(encoding="utf-8"), context.template_vars)
+
+    # Inject extra frontmatter and/or body
+    if extra_frontmatter or body is not None:
+        rendered = _inject_into_note(rendered, extra_frontmatter, body)
+
     path.write_text(rendered, encoding="utf-8")
     build_type_index(config, note_name)
     build_root_index(config)
     return path
+
+
+def _inject_into_note(
+    rendered: str,
+    extra_frontmatter: dict[str, Any] | None,
+    body: str | None,
+) -> str:
+    """Inject extra frontmatter fields and/or replace the body of a rendered note."""
+    match = FRONTMATTER_RE.match(rendered)
+    if not match:
+        # No frontmatter — just prepend body
+        if body is not None:
+            return body
+        return rendered
+
+    fm_text = match.group(1)
+    after_fm = rendered[match.end():]
+
+    if extra_frontmatter:
+        extra_lines = []
+        for k, v in extra_frontmatter.items():
+            extra_lines.append(f"{k}: {_format_frontmatter_value(v)}")
+        fm_text = fm_text.rstrip() + "\n" + "\n".join(extra_lines)
+
+    result = f"---\n{fm_text}\n---\n"
+    if body is not None:
+        result += "\n" + body + "\n"
+    else:
+        result += after_fm
+    return result
+
+
+def _format_frontmatter_value(value: Any) -> str:
+    """Format a value for YAML frontmatter."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list):
+        return "[" + ", ".join(str(v) for v in value) + "]"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if value is None:
+        return "null"
+    s = str(value)
+    # Quote strings that contain special YAML characters
+    if any(c in s for c in ":#{}[]|>&*!%@`"):
+        return f'"{s}"'
+    return s
 
 
 def _parse_scalar(raw: str) -> Any:

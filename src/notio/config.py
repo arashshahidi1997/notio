@@ -100,7 +100,16 @@ def _load_notio_toml(path: Path) -> dict | None:
     return tomllib.loads(config_path.read_text(encoding="utf-8"))
 
 
-def load_config(root: Path) -> Config:
+def load_config(
+    root: Path,
+    *,
+    template_root: str | Path | None = None,
+) -> Config:
+    """Load notio configuration.
+
+    *template_root* overrides the default template directory.  When called
+    from ``projio add notio`` this is typically ``.projio/notio/templates``.
+    """
     raw = _default_mapping()
     loaded = _load_notio_toml(root)
     if loaded is None:
@@ -112,7 +121,11 @@ def load_config(root: Path) -> Config:
         raw["types"] = raw_types
 
     notes_root = root / raw["notes_root"]
-    template_root = root / raw["template_root"]
+    if template_root is not None:
+        _tpl = Path(template_root)
+        template_root_resolved = _tpl if _tpl.is_absolute() else root / _tpl
+    else:
+        template_root_resolved = root / raw["template_root"]
     note_types = {
         name: NoteTypeConfig(
             name=name,
@@ -133,7 +146,7 @@ def load_config(root: Path) -> Config:
     return Config(
         root=root,
         notes_root=notes_root,
-        template_root=template_root,
+        template_root=template_root_resolved,
         note_types=note_types,
         diataxis=diataxis,
     )

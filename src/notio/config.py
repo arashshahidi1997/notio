@@ -7,7 +7,7 @@ import tomllib
 
 DEFAULT_CONFIG_TEXT = """version = 1
 notes_root = "docs/log"
-template_root = ".notio/templates"
+template_root = ".projio/notio/templates"
 
 [types.daily]
 mode = "period"

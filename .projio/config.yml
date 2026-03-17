@@ -17,8 +17,8 @@ notio:
 
 codio:
   enabled: true
-  catalog_path: .codio/catalog.yml
-  profiles_path: .codio/profiles.yml
+  catalog_path: .projio/codio/catalog.yml
+  profiles_path: .projio/codio/profiles.yml
   notes_dir: docs/reference/codelib/libraries/
 
 helpers:

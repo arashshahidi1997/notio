@@ -33,7 +33,7 @@ def test_load_default_config(tmp_path: Path) -> None:
     config = load_config(tmp_path)
     assert config.root == tmp_path
     assert config.notes_root == tmp_path / "docs" / "log"
-    assert config.template_root == tmp_path / ".notio" / "templates"
+    assert config.template_root == tmp_path / ".projio" / "notio" / "templates"
     assert "daily" in config.note_types
     assert "weekly" in config.note_types
     assert config.note_types["daily"].mode == "period"
@@ -71,7 +71,7 @@ def test_diataxis_config_custom(tmp_path: Path) -> None:
         """
 version = 1
 notes_root = "docs/log"
-template_root = ".notio/templates"
+template_root = ".projio/notio/templates"
 
 [diataxis]
 docs_root = "documentation"
@@ -127,7 +127,7 @@ def test_init_workspace(tmp_path: Path) -> None:
     assert any("templates" in str(p) for p in created)
     assert (tmp_path / "docs" / "log" / "index.md").exists()
     assert (tmp_path / "docs" / "log" / "daily" / "index.md").exists()
-    assert (tmp_path / ".notio" / "templates" / "daily.md").exists()
+    assert (tmp_path / ".projio" / "notio" / "templates" / "daily.md").exists()
 
 
 def test_init_workspace_idempotent(tmp_path: Path) -> None:

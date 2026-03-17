@@ -41,6 +41,21 @@ toc_groupby = "status"
 - `toc_keys`
 - `toc_groupby`
 
+### Task note type
+
+The built-in `task` type supports the workflow pipeline's "decide" stage — promoting ideas into executable work items:
+
+```toml
+[types.task]
+mode = "event"
+template = "task.md"
+filename = "task-{owner}-{timestamp}.md"
+toc_keys = ["status", "title"]
+toc_groupby = "status"
+```
+
+Task notes include frontmatter fields for `status` (pending/active/done/cancelled), `actionable`, `prompt` (agent instruction), and `source_note` (link to the originating note). The `--enrich` flag generates a structured Prompt section from source content via LLM.
+
 ## Diataxis section
 
 The optional `[diataxis]` section configures the Diataxis documentation scaffolding.

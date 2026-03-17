@@ -31,6 +31,9 @@ Once running, agents can call:
 | `note_list` | List recent notes, optionally filtered by type |
 | `note_latest` | Content of the most recent note |
 | `note_read` | Read a specific note by path |
+| `note_search` | Search notes by keyword (title, tags, content) |
+| `note_update` | Update frontmatter fields of an existing note |
+| `note_links` | Suggest wikilinks to related notes (optional: apply them) |
 | `note_create` | Create a new note |
 | `note_types` | List configured note types |
 | `toc_rebuild` | Regenerate note indexes |
@@ -44,11 +47,13 @@ Once running, agents can call:
 The query functions are also available for direct import:
 
 ```python
-from notio import list_notes, latest_note, read_note
+from notio import list_notes, latest_note, read_note, search_notes, update_note_frontmatter
 
 notes = list_notes(".", note_type="idea", limit=5)
 latest = latest_note(".", note_type="daily")
 note = read_note(".", "docs/log/meeting/meeting-arash-20260312.md")
+results = search_notes(".", "spike train", limit=10)
+update_note_frontmatter(".", "docs/log/task/task-arash-20260316.md", {"status": "done"})
 ```
 
 ## Configure the root

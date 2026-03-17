@@ -108,6 +108,9 @@ Exposes all notio operations as MCP tools for agent consumption:
 - `note_list` — list recent notes, optionally filtered by type
 - `note_latest` — content of the most recent note
 - `note_read` — read a specific note by path
+- `note_search` — search notes by keyword (title, tags, content)
+- `note_update` — update frontmatter fields of an existing note
+- `note_links` — suggest wikilinks to related notes (optional: apply)
 - `note_create` — create a new note
 - `note_types` — list configured note types
 - `toc_rebuild` — regenerate note indexes
@@ -123,7 +126,7 @@ The server resolves the project root from the `--root` flag or the `NOTIO_ROOT` 
 The following functions are exported from `notio` for programmatic use:
 
 ```python
-from notio import list_notes, latest_note, read_note
+from notio import list_notes, latest_note, read_note, search_notes, update_note_frontmatter
 ```
 
 ### `list_notes(root, *, note_type=None, limit=20)`
@@ -137,4 +140,12 @@ Returns the most recent note as a dict including full content, or `None`.
 ### `read_note(root, path)`
 
 Reads a specific note by its relative path. Returns a dict with content and frontmatter, or `None`.
+
+### `search_notes(root, query, *, note_type=None, limit=10)`
+
+Searches notes by keyword matching against title, tags, and content. Returns results ranked by relevance (hit count), then by recency.
+
+### `update_note_frontmatter(root, path, fields)`
+
+Merges `fields` into existing frontmatter of a note. Preserves key order, overwrites existing keys, appends new ones. Returns the updated metadata dict.
 

@@ -50,6 +50,13 @@ template = "personal.md"
 filename = "personal-{owner}-{timestamp}.md"
 toc_keys = ["title"]
 
+[types.task]
+mode = "event"
+template = "task.md"
+filename = "task-{owner}-{timestamp}.md"
+toc_keys = ["status", "title"]
+toc_groupby = "status"
+
 # [diataxis]
 # docs_root = "docs"
 # sections = ["tutorials", "how-to", "explanation", "reference"]

@@ -1,9 +1,8 @@
 """FastMCP stdio server — registers all notio tools."""
-from __future__ import annotations
 
 from fastmcp import FastMCP
 
-from .common import JsonDict, get_notio_root, json_dict
+from .common import get_notio_root, json_dict
 
 server = FastMCP("notio")
 
@@ -12,7 +11,7 @@ server = FastMCP("notio")
 
 
 @server.tool("note_list")
-def note_list_tool(note_type: str = "", limit: int = 20) -> JsonDict:
+def note_list_tool(note_type: str = "", limit: int = 20) -> dict:
     """List recent notes, optionally filtered by type."""
     try:
         from notio.query import list_notes
@@ -25,7 +24,7 @@ def note_list_tool(note_type: str = "", limit: int = 20) -> JsonDict:
 
 
 @server.tool("note_latest")
-def note_latest_tool(note_type: str = "") -> JsonDict:
+def note_latest_tool(note_type: str = "") -> dict:
     """Content of the most recent note of a given type."""
     try:
         from notio.query import latest_note
@@ -38,7 +37,7 @@ def note_latest_tool(note_type: str = "") -> JsonDict:
 
 
 @server.tool("note_read")
-def note_read_tool(path: str) -> JsonDict:
+def note_read_tool(path: str) -> dict:
     """Read a specific note by its relative path."""
     try:
         from notio.query import read_note
@@ -46,6 +45,75 @@ def note_read_tool(path: str) -> JsonDict:
         root = get_notio_root()
         note = read_note(root, path)
         return json_dict(note or {"error": f"note not found: {path}"})
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
+@server.tool("note_search")
+def note_search_tool(query: str, note_type: str = "", limit: int = 10) -> dict:
+    """Search notes by keyword matching against title, tags, and content."""
+    try:
+        from notio.query import search_notes
+
+        root = get_notio_root()
+        notes = search_notes(root, query, note_type=note_type or None, limit=limit)
+        return json_dict({"notes": notes, "count": len(notes)})
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
+@server.tool("note_update")
+def note_update_tool(path: str, fields: str) -> dict:
+    """Update frontmatter fields of an existing note. Pass fields as a JSON string, e.g. '{"status": "done", "actionable": true}'."""
+    try:
+        import json
+        from notio.query import update_note_frontmatter
+
+        root = get_notio_root()
+        parsed_fields = json.loads(fields)
+        meta = update_note_frontmatter(root, path, parsed_fields)
+        return json_dict({"path": path, "updated_fields": list(parsed_fields.keys()), "frontmatter": meta})
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
+@server.tool("note_links")
+def note_links_tool(path: str, apply: bool = False) -> dict:
+    """Suggest wikilinks from a note to related notes. Set apply=true to append them."""
+    try:
+        from notio.llm import load_config as load_llm_config, suggest_links
+        from notio.query import list_notes, read_note
+
+        root = get_notio_root()
+        note = read_note(root, path)
+        if note is None:
+            return json_dict({"error": f"Note not found: {path}"})
+
+        # Gather sibling notes for context
+        siblings = list_notes(root, limit=30)
+        # Exclude the note itself
+        siblings = [s for s in siblings if s["path"] != path]
+
+        llm_config = load_llm_config(root)
+        links = suggest_links(
+            root / path,
+            note["content"],
+            siblings,
+            config=llm_config,
+        )
+        if links is None:
+            return json_dict({"error": "LLM unavailable"})
+
+        if apply and links:
+            note_path = root / path
+            text = note_path.read_text(encoding="utf-8")
+            link_section = "\n\n## Related Notes\n\n" + "\n".join(
+                f"- [[{link['target']}]] — {link.get('reason', '')}"
+                for link in links
+            ) + "\n"
+            note_path.write_text(text.rstrip() + link_section, encoding="utf-8")
+
+        return json_dict({"links": links, "applied": apply and bool(links)})
     except Exception as exc:
         return json_dict({"error": str(exc)})
 
@@ -59,7 +127,7 @@ def note_create_tool(
     owner: str = "",
     title: str = "",
     date: str = "",
-) -> JsonDict:
+) -> dict:
     """Create a new note of the given type."""
     try:
         from notio.config import load_config
@@ -80,7 +148,7 @@ def note_create_tool(
 
 
 @server.tool("note_types")
-def note_types_tool() -> JsonDict:
+def note_types_tool() -> dict:
     """List all configured note types."""
     try:
         from notio.config import load_config
@@ -102,7 +170,7 @@ def note_types_tool() -> JsonDict:
 
 
 @server.tool("toc_rebuild")
-def toc_rebuild_tool(note_type: str = "") -> JsonDict:
+def toc_rebuild_tool(note_type: str = "") -> dict:
     """Regenerate note indexes."""
     try:
         from notio.config import load_config
@@ -126,7 +194,7 @@ def toc_rebuild_tool(note_type: str = "") -> JsonDict:
 
 
 @server.tool("diataxis_init")
-def diataxis_init_tool(mkdocs: bool = False) -> JsonDict:
+def diataxis_init_tool(mkdocs: bool = False) -> dict:
     """Scaffold Diataxis documentation structure."""
     try:
         from notio.config import load_config
@@ -135,7 +203,7 @@ def diataxis_init_tool(mkdocs: bool = False) -> JsonDict:
         root = get_notio_root()
         config = load_config(root)
         created, snippet = diataxis_init(config, mkdocs=mkdocs)
-        result: dict = {"created": [str(p) for p in created]}
+        result = {"created": [str(p) for p in created]}
         if snippet:
             result["mkdocs_snippet"] = snippet
         return json_dict(result)
@@ -144,7 +212,7 @@ def diataxis_init_tool(mkdocs: bool = False) -> JsonDict:
 
 
 @server.tool("diataxis_add")
-def diataxis_add_tool(section: str, slug: str, title: str = "") -> JsonDict:
+def diataxis_add_tool(section: str, slug: str, title: str = "") -> dict:
     """Add a page to a Diataxis section."""
     try:
         from notio.config import load_config
@@ -159,7 +227,7 @@ def diataxis_add_tool(section: str, slug: str, title: str = "") -> JsonDict:
 
 
 @server.tool("diataxis_toc")
-def diataxis_toc_tool(section: str = "") -> JsonDict:
+def diataxis_toc_tool(section: str = "") -> dict:
     """Regenerate Diataxis section indexes."""
     try:
         from notio.config import load_config
@@ -177,7 +245,7 @@ def diataxis_toc_tool(section: str = "") -> JsonDict:
 
 
 @server.tool("config_show")
-def config_show_tool() -> JsonDict:
+def config_show_tool() -> dict:
     """Show the current notio configuration."""
     try:
         from notio.config import load_config

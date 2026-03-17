@@ -18,8 +18,26 @@ pip install notio
 - `notio diataxis init`
 - `notio diataxis add <section> <slug>`
 - `notio diataxis toc [<section>|--all]`
+- `notio mcp` — Start FastMCP server (stdio) for agent integration
 
 The source of truth is the Python CLI plus `notio.toml`. Make wrappers are optional convenience only.
+
+## MCP server
+
+Notio includes an optional MCP server (`pip install notio[mcp]`) that exposes note operations as tools for AI agents:
+
+| Tool | Description |
+|------|-------------|
+| `note_list` | List recent notes by type |
+| `note_latest` | Most recent note content |
+| `note_read` | Read a specific note by path |
+| `note_create` | Create a new note |
+| `note_update` | Update note frontmatter fields |
+| `note_types` | List configured note types |
+| `note_search` | Semantic search over notes |
+
+Start standalone: `notio mcp`
+Or via projio: `projio mcp -C .` (aggregates all ecosystem tools).
 
 ## Quickstart
 

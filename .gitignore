@@ -13,6 +13,8 @@ venv/
 .cache/
 
 # >>> projio >>>
+.claude/settings.json
+.mcp.json
 .projio.mkdocs.yml
 .projio/servers.json
 .projio/site/

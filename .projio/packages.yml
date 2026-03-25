@@ -1,0 +1,10 @@
+packages:
+  biblio:
+    enabled: true
+    path: .projio/biblio
+  indexio:
+    enabled: true
+    path: .projio/indexio
+  claude:
+    enabled: true
+    path: .projio/claude

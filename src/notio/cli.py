@@ -26,6 +26,8 @@ def _add_note_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--project", help="Source project id (stored in frontmatter)")
     p.add_argument("--metadata", help="JSON string of extra frontmatter fields")
     p.add_argument("--body", help="Note body (replaces template body)")
+    p.add_argument("--series", help="Series name for grouping related notes")
+    p.add_argument("--refs", help="JSON array of cross-references, e.g. '[{\"note\": \"idea-arash-20260211\"}]'")
     p.add_argument("--enrich", action="store_true", help="Use LLM to structure the note body")
 
 
@@ -36,6 +38,10 @@ def _build_extra_frontmatter(args: argparse.Namespace) -> dict:
         fm["source"] = args.source
     if getattr(args, "project", None):
         fm["project_primary"] = args.project
+    if getattr(args, "series", None):
+        fm["series"] = args.series
+    if getattr(args, "refs", None):
+        fm["refs"] = json.loads(args.refs)
     md = getattr(args, "metadata", None)
     if md:
         fm.update(json.loads(md))
@@ -114,8 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true")
     p.add_argument("--write-config", action="store_true")
 
-    # -- flat note commands: notio idea, notio issue, notio meeting, etc. --
-    for note_type in ("idea", "issue", "meeting", "daily", "weekly", "commit", "personal", "task"):
+    # -- flat note commands: notio idea, notio issue, notio task, notio meeting --
+    for note_type in ("idea", "issue", "task", "meeting"):
         p = sub.add_parser(note_type, help=f"Create a {note_type} note")
         _add_note_flags(p)
 
@@ -184,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     # -- flat note commands --
-    note_types = {"idea", "issue", "meeting", "daily", "weekly", "commit", "personal", "task"}
+    note_types = {"idea", "issue", "meeting", "task"}
     if args.command in note_types:
         return _run_note(args, args.command)
 

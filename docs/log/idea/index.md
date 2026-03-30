@@ -2,6 +2,8 @@
 
 ## Contents
 
+- [idea-arash-20260328-095202-896448 title:Some idea about notes](idea-arash-20260328-095202-896448.md)
+- [idea-arash-20260328-095010-192196 title:Some idea about notes](idea-arash-20260328-095010-192196.md)
 - [idea-arash-20260324-182326-886194 title:Some idea about notes](idea-arash-20260324-182326-886194.md)
 - [idea-arash-20260324-091015-102245 title:Some idea about notes](idea-arash-20260324-091015-102245.md)
 - [idea-arash-20260324-090601-223385 title:Some idea about notes](idea-arash-20260324-090601-223385.md)

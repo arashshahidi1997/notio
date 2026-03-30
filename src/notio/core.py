@@ -17,56 +17,25 @@ ROOT_INDEX_TITLE = "Project Logs"
 
 
 DEFAULT_TEMPLATES: dict[str, str] = {
-    "commit.md": """---
-title: "${title}"
-date: ${date}
-timestamp: ${timestamp}
-tags: [commit]
----
-
-# ${title}
-
-## Summary
-- 
-
-## Details
-- 
-""",
-    "daily.md": """---
-title: "${title}"
-date: ${date}
-timestamp: ${timestamp}
-tags: [daily]
----
-
-# ${date}
-
-## Tasks
-- [ ]
-
-## Done
-- [ ]
-
-## Notes
-- 
-""",
     "idea.md": """---
 title: "${title}"
 date: ${date}
 timestamp: ${timestamp}
+series: ""
+refs: []
 tags: [idea]
 ---
 
 # ${title}
 
 ## Overview
-- 
+-
 
 ## Tasks
 - [ ]
 
 ## Notes
-- 
+-
 """,
     "issue.md": """---
 title: "${title}"
@@ -74,50 +43,24 @@ status: open
 created: ${date}
 updated: ${date}
 timestamp: ${timestamp}
+series: ""
+refs: []
 tags: [issue]
 ---
 
 # ${title}
 
 ## Summary
-- 
+-
 
 ## Context
-- 
+-
 
 ## Tasks
 - [ ]
 
 ## Notes
-- 
-""",
-    "meeting.md": """---
-title: "${title}"
-date: ${date}
-timestamp: ${timestamp}
-participants: []
-tags: [meeting]
----
-
-# ${title} - ${date}
-
-## Notes
-- 
-
-## Action Items
-- [ ]
-""",
-    "personal.md": """---
-title: "${title}"
-date: ${date}
-timestamp: ${timestamp}
-tags: [personal]
----
-
-# ${title}
-
-## Notes
-- 
+-
 """,
     "task.md": """---
 title: "${title}"
@@ -128,6 +71,8 @@ actionable: true
 prompt: ""
 source_note: ""
 project_primary: ""
+series: ""
+refs: []
 tags: [task]
 ---
 
@@ -153,23 +98,23 @@ tags: [task]
 
 (Filled in after execution)
 """,
-    "weekly.md": """---
+    "meeting.md": """---
 title: "${title}"
-week: ${year}-W${week}
+date: ${date}
 timestamp: ${timestamp}
-tags: [weekly]
+participants: []
+series: ""
+refs: []
+tags: [meeting]
 ---
 
-# Week ${year}-W${week}
+# ${title} - ${date}
 
-## Highlights
-- 
+## Notes
+-
 
-## Completed
-- 
-
-## Next
-- 
+## Action Items
+- [ ]
 """,
 }
 
@@ -224,10 +169,6 @@ def make_timestamp(now: datetime | None = None) -> str:
 
 
 def default_title(note_name: str, when: date) -> str:
-    if note_name == "daily":
-        return f"Daily {when.isoformat()}"
-    if note_name == "weekly":
-        return f"Week {when.strftime('%Y')}-W{when.strftime('%V')}"
     return note_name
 
 
@@ -330,10 +271,23 @@ def _inject_into_note(
     after_fm = rendered[match.end():]
 
     if extra_frontmatter:
-        extra_lines = []
+        # Replace existing keys in-place; append new keys at the end
+        fm_lines = fm_text.splitlines()
+        existing_keys: dict[str, int] = {}
+        for i, line in enumerate(fm_lines):
+            if ":" in line and not line.startswith((" ", "\t")):
+                key = line.split(":", 1)[0].strip()
+                existing_keys[key] = i
+        append_lines: list[str] = []
         for k, v in extra_frontmatter.items():
-            extra_lines.append(f"{k}: {_format_frontmatter_value(v)}")
-        fm_text = fm_text.rstrip() + "\n" + "\n".join(extra_lines)
+            formatted = f"{k}: {_format_frontmatter_value(v)}"
+            if k in existing_keys:
+                fm_lines[existing_keys[k]] = formatted
+            else:
+                append_lines.append(formatted)
+        fm_text = "\n".join(fm_lines).rstrip()
+        if append_lines:
+            fm_text += "\n" + "\n".join(append_lines)
 
     result = f"---\n{fm_text}\n---\n"
     if body is not None:
@@ -344,10 +298,27 @@ def _inject_into_note(
 
 
 def _format_frontmatter_value(value: Any) -> str:
-    """Format a value for YAML frontmatter."""
+    """Format a value for YAML frontmatter.
+
+    Lists of dicts (e.g. refs) are rendered as multi-line YAML::
+
+        refs:
+          - note: idea-arash-20260211
+          - plan: 03-Questions
+    """
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, list):
+        # Check for list-of-dicts (refs-style)
+        if value and isinstance(value[0], dict):
+            lines = []
+            for item in value:
+                if isinstance(item, dict):
+                    for k, v in item.items():
+                        lines.append(f"\n  - {k}: {v}")
+                else:
+                    lines.append(f"\n  - {item}")
+            return "".join(lines)
         return "[" + ", ".join(str(v) for v in value) + "]"
     if isinstance(value, (int, float)):
         return str(value)
@@ -385,11 +356,38 @@ def parse_frontmatter(text: str) -> dict[str, Any]:
     if not match:
         return {}
     meta: dict[str, Any] = {}
+    current_key: str | None = None
+    current_list: list[Any] | None = None
+
     for line in match.group(1).splitlines():
+        # Indented list continuation (e.g. "  - note: foo" under a key)
+        stripped = line.strip()
+        if line.startswith(("  -", "\t-")) and current_key is not None and current_list is not None:
+            item = stripped.lstrip("- ").strip()
+            if ":" in item:
+                k, v = item.split(":", 1)
+                current_list.append({k.strip(): _parse_scalar(v)})
+            else:
+                current_list.append(_parse_scalar(item))
+            meta[current_key] = current_list
+            continue
+
+        # Top-level key: value
         if ":" not in line:
             continue
         key, raw_value = line.split(":", 1)
-        meta[key.strip()] = _parse_scalar(raw_value)
+        key = key.strip()
+        value = _parse_scalar(raw_value)
+        # Start tracking multi-line list if value is an empty list or empty
+        # (empty string occurs when list items follow on indented lines)
+        if (isinstance(value, list) and len(value) == 0) or value == "":
+            current_key = key
+            current_list = []
+            meta[key] = value
+        else:
+            current_key = None
+            current_list = None
+            meta[key] = value
     return meta
 
 

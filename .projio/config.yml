@@ -1,6 +1,7 @@
 # projio workspace config
 project_name: notio
 project_kind: generic
+push_sibling: github
 description: ""
 
 indexio:

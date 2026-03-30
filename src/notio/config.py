@@ -9,27 +9,11 @@ DEFAULT_CONFIG_TEXT = """version = 1
 notes_root = "docs/log"
 template_root = ".projio/notio/templates"
 
-[types.daily]
-mode = "period"
-template = "daily.md"
-filename = "daily-{owner}-{date}.md"
-
-[types.weekly]
-mode = "period"
-template = "weekly.md"
-filename = "weekly-{owner}-{year}-W{week}.md"
-
-[types.commit]
-mode = "event"
-template = "commit.md"
-filename = "commit-{owner}-{timestamp}.md"
-toc_keys = ["title"]
-
 [types.idea]
 mode = "event"
 template = "idea.md"
 filename = "idea-{owner}-{timestamp}.md"
-toc_keys = ["title"]
+toc_keys = ["title", "series"]
 
 [types.issue]
 mode = "event"
@@ -38,24 +22,18 @@ filename = "issue-{owner}-{timestamp}.md"
 toc_keys = ["status"]
 toc_groupby = "status"
 
-[types.meeting]
-mode = "event"
-template = "meeting.md"
-filename = "meeting-{owner}-{timestamp}.md"
-toc_keys = ["participants"]
-
-[types.personal]
-mode = "event"
-template = "personal.md"
-filename = "personal-{owner}-{timestamp}.md"
-toc_keys = ["title"]
-
 [types.task]
 mode = "event"
 template = "task.md"
 filename = "task-{owner}-{timestamp}.md"
 toc_keys = ["status", "title"]
 toc_groupby = "status"
+
+[types.meeting]
+mode = "event"
+template = "meeting.md"
+filename = "meeting-{owner}-{timestamp}.md"
+toc_keys = ["participants"]
 
 # [diataxis]
 # docs_root = "docs"

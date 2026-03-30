@@ -3,6 +3,7 @@ __all__ = [
     "list_notes",
     "latest_note",
     "read_note",
+    "resolve_note",
     "search_notes",
     "update_note_frontmatter",
 ]
@@ -13,6 +14,7 @@ from notio.query import (
     latest_note,
     list_notes,
     read_note,
+    resolve_note,
     search_notes,
     update_note_frontmatter,
 )

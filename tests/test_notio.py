@@ -34,9 +34,10 @@ def test_load_default_config(tmp_path: Path) -> None:
     assert config.root == tmp_path
     assert config.notes_root == tmp_path / "docs" / "log"
     assert config.template_root == tmp_path / ".projio" / "notio" / "templates"
-    assert "daily" in config.note_types
-    assert "weekly" in config.note_types
-    assert config.note_types["daily"].mode == "period"
+    assert "idea" in config.note_types
+    assert "issue" in config.note_types
+    assert "task" in config.note_types
+    assert "meeting" in config.note_types
     assert config.note_types["meeting"].mode == "event"
 
 
@@ -126,8 +127,8 @@ def test_init_workspace(tmp_path: Path) -> None:
     created = init_workspace(config)
     assert any("templates" in str(p) for p in created)
     assert (tmp_path / "docs" / "log" / "index.md").exists()
-    assert (tmp_path / "docs" / "log" / "daily" / "index.md").exists()
-    assert (tmp_path / ".projio" / "notio" / "templates" / "daily.md").exists()
+    assert (tmp_path / "docs" / "log" / "idea" / "index.md").exists()
+    assert (tmp_path / ".projio" / "notio" / "templates" / "idea.md").exists()
 
 
 def test_init_workspace_idempotent(tmp_path: Path) -> None:
@@ -141,6 +142,19 @@ def test_init_workspace_idempotent(tmp_path: Path) -> None:
 
 
 def test_create_period_note(tmp_path: Path) -> None:
+    # Period types are no longer in defaults; add one via notio.toml
+    (tmp_path / "notio.toml").write_text(
+        'version = 1\nnotes_root = "docs/log"\ntemplate_root = ".projio/notio/templates"\n\n'
+        '[types.daily]\nmode = "period"\ntemplate = "daily.md"\nfilename = "daily-{owner}-{date}.md"\n',
+        encoding="utf-8",
+    )
+    # Write a minimal daily template
+    tpl_dir = tmp_path / ".projio" / "notio" / "templates"
+    tpl_dir.mkdir(parents=True, exist_ok=True)
+    (tpl_dir / "daily.md").write_text(
+        '---\ntitle: "${title}"\ndate: ${date}\ntimestamp: ${timestamp}\ntags: [daily]\n---\n\n# ${title}\n',
+        encoding="utf-8",
+    )
     config = load_config(tmp_path)
     init_workspace(config)
     path = create_note(config, "daily", owner="tester", note_date="2026-03-01")
@@ -170,6 +184,18 @@ def test_event_note_no_overwrite(tmp_path: Path) -> None:
 
 
 def test_period_note_overwrite(tmp_path: Path) -> None:
+    # Period types are no longer in defaults; add one via notio.toml
+    (tmp_path / "notio.toml").write_text(
+        'version = 1\nnotes_root = "docs/log"\ntemplate_root = ".projio/notio/templates"\n\n'
+        '[types.daily]\nmode = "period"\ntemplate = "daily.md"\nfilename = "daily-{owner}-{date}.md"\n',
+        encoding="utf-8",
+    )
+    tpl_dir = tmp_path / ".projio" / "notio" / "templates"
+    tpl_dir.mkdir(parents=True, exist_ok=True)
+    (tpl_dir / "daily.md").write_text(
+        '---\ntitle: "${title}"\ndate: ${date}\ntimestamp: ${timestamp}\ntags: [daily]\n---\n\n# ${title}\n',
+        encoding="utf-8",
+    )
     config = load_config(tmp_path)
     init_workspace(config)
     path1 = create_note(config, "daily", owner="tester", note_date="2026-03-01")
@@ -197,7 +223,7 @@ def test_build_root_index(tmp_path: Path) -> None:
     init_workspace(config)
     index = build_root_index(config)
     content = index.read_text(encoding="utf-8")
-    assert "daily" in content.lower()
+    assert "idea" in content.lower()
     assert "meeting" in content.lower()
 
 
@@ -434,3 +460,71 @@ def test_top_level_imports() -> None:
     assert callable(lsn)
     assert callable(ln)
     assert callable(rn)
+
+
+# ---- series and refs ---------------------------------------------------------
+
+
+def test_create_note_with_series(tmp_path: Path) -> None:
+    config = load_config(tmp_path)
+    init_workspace(config)
+    path = create_note(
+        config, "idea", owner="tester", title="Audit Part 1",
+        extra_frontmatter={"series": "plan-audit"},
+    )
+    content = path.read_text(encoding="utf-8")
+    meta = parse_frontmatter(content)
+    assert meta["series"] == "plan-audit"
+
+
+def test_list_notes_filter_by_series(tmp_path: Path) -> None:
+    config = load_config(tmp_path)
+    init_workspace(config)
+    create_note(config, "idea", owner="tester", title="A", extra_frontmatter={"series": "alpha"})
+    create_note(config, "idea", owner="tester", title="B", extra_frontmatter={"series": "beta"})
+    create_note(config, "idea", owner="tester", title="C")  # no series
+    notes = list_notes(tmp_path, series="alpha")
+    assert len(notes) == 1
+    assert notes[0]["title"] == "A"
+
+
+def test_search_notes_filter_by_series(tmp_path: Path) -> None:
+    from notio.query import search_notes
+
+    config = load_config(tmp_path)
+    init_workspace(config)
+    create_note(config, "idea", owner="tester", title="X finding", extra_frontmatter={"series": "audit"})
+    create_note(config, "idea", owner="tester", title="Y finding", extra_frontmatter={"series": "review"})
+    notes = search_notes(tmp_path, "finding", series="audit")
+    assert len(notes) == 1
+    assert notes[0]["series"] == "audit"
+
+
+def test_create_note_with_refs(tmp_path: Path) -> None:
+    config = load_config(tmp_path)
+    init_workspace(config)
+    refs = [{"note": "idea-arash-20260211"}, {"plan": "03-Questions"}]
+    path = create_note(
+        config, "idea", owner="tester", title="With Refs",
+        extra_frontmatter={"refs": refs},
+    )
+    content = path.read_text(encoding="utf-8")
+    meta = parse_frontmatter(content)
+    assert isinstance(meta["refs"], list)
+    assert len(meta["refs"]) == 2
+    assert meta["refs"][0] == {"note": "idea-arash-20260211"}
+    assert meta["refs"][1] == {"plan": "03-Questions"}
+
+
+def test_default_templates_have_series_and_refs(tmp_path: Path) -> None:
+    config = load_config(tmp_path)
+    init_workspace(config)
+    path = create_note(config, "idea", owner="tester", title="Test")
+    meta = parse_frontmatter(path.read_text(encoding="utf-8"))
+    assert "series" in meta
+    assert "refs" in meta
+
+
+def test_default_config_has_four_types(tmp_path: Path) -> None:
+    config = load_config(tmp_path)
+    assert set(config.note_types.keys()) == {"idea", "issue", "task", "meeting"}

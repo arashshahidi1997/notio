@@ -37,8 +37,6 @@ pip install ".[docs]"
 mkdocs serve
 
 # Make shortcuts (defined in workflow/*.mk)
-make note-daily
-make note-weekly
 make toc-all
 ```
 
@@ -53,11 +51,11 @@ Source modules in `src/notio/`:
 - **query.py** — Read-only note query functions (`list_notes`, `latest_note`, `read_note`). Exported from `notio.__init__` for library use by projio
 - **mcp/** — FastMCP server package (optional, requires `fastmcp`). Exposes all notio operations as MCP tools. Uses `NOTIO_ROOT` env var for project root resolution
 
-Note types have two modes:
-- **period** (e.g. `daily`, `weekly`) — reusable files keyed by date/week
-- **event** (e.g. `commit`, `idea`, `meeting`) — unique timestamped files
+Default note types are four core types: **idea**, **issue**, **task**, **meeting** (all event mode). Projects can add custom types (including period-mode types like `daily`, `weekly`) via `notio.toml`.
 
-Default templates are embedded in `core.py`. User-customizable templates go in `.notio/templates/`. Generated notes and indexes live under `docs/log/`.
+All templates include `series` (string) and `refs` (list of cross-references) frontmatter fields. Series groups related notes; refs provide structured cross-references to other notes, plan sections, or pipeline mods.
+
+Default templates are embedded in `core.py`. User-customizable templates go in `.projio/notio/templates/`. Generated notes and indexes live under `docs/log/`.
 
 ## Configuration
 

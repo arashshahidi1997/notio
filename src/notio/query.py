@@ -12,9 +12,10 @@ def list_notes(
     root: Path | str,
     *,
     note_type: str | None = None,
+    series: str | None = None,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    """List recent notes, optionally filtered by type.
+    """List recent notes, optionally filtered by type and/or series.
 
     Returns a list of dicts with keys: path, type, and frontmatter fields.
     Sorted by modification time, newest first.
@@ -37,6 +38,8 @@ def list_notes(
             if not path.is_file() or path.suffix != ".md" or path.name == "index.md":
                 continue
             meta = parse_frontmatter(path.read_text(encoding="utf-8"))
+            if series and str(meta.get("series", "")) != series:
+                continue
             entry: dict[str, Any] = {
                 "path": str(path.relative_to(root)),
                 "type": name,
@@ -83,14 +86,63 @@ def read_note(
     return result
 
 
+def resolve_note(
+    root: Path | str,
+    note_id: str,
+) -> dict[str, Any] | None:
+    """Resolve a note by its timestamp ID, capture ID, or filename fragment.
+
+    Looks for *note_id* in:
+    1. The ``timestamp`` frontmatter field (exact match).
+    2. The ``capture_id`` frontmatter field (exact match).
+    3. The note filename (substring match).
+
+    Returns the note dict (with ``content``) on match, or ``None``.
+    """
+    root = Path(root).resolve()
+    config = load_config(root)
+
+    for _name, _type_cfg in config.note_types.items():
+        folder = config.notes_root / _name
+        if not folder.is_dir():
+            continue
+        for path in folder.iterdir():
+            if not path.is_file() or path.suffix != ".md" or path.name == "index.md":
+                continue
+            # Fast path: check filename first
+            if note_id in path.name:
+                text = path.read_text(encoding="utf-8")
+                meta = parse_frontmatter(text)
+                result: dict[str, Any] = {
+                    "path": str(path.relative_to(root)),
+                    "type": _name,
+                    "content": text,
+                }
+                result.update(meta)
+                return result
+            # Slow path: check frontmatter fields
+            text = path.read_text(encoding="utf-8")
+            meta = parse_frontmatter(text)
+            if meta.get("timestamp") == note_id or meta.get("capture_id") == note_id:
+                result = {
+                    "path": str(path.relative_to(root)),
+                    "type": _name,
+                    "content": text,
+                }
+                result.update(meta)
+                return result
+    return None
+
+
 def search_notes(
     root: Path | str,
     query: str,
     *,
     note_type: str | None = None,
+    series: str | None = None,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
-    """Search notes by keyword matching against title, tags, and content.
+    """Search notes by keyword matching against title, tags, series, and content.
 
     Returns notes sorted by relevance (number of query term hits), newest first
     for ties.
@@ -117,11 +169,14 @@ def search_notes(
                 continue
             text = path.read_text(encoding="utf-8")
             meta = parse_frontmatter(text)
-            # Build searchable text from title, tags, and body
+            if series and str(meta.get("series", "")) != series:
+                continue
+            # Build searchable text from title, tags, series, and body
             title = str(meta.get("title", "")).lower()
             tags = " ".join(str(t) for t in meta.get("tags", [])).lower() if isinstance(meta.get("tags"), list) else str(meta.get("tags", "")).lower()
+            note_series = str(meta.get("series", "")).lower()
             body = text.lower()
-            hits = sum(1 for t in terms if t in title or t in tags or t in body)
+            hits = sum(1 for t in terms if t in title or t in tags or t in note_series or t in body)
             if hits == 0:
                 continue
             entry: dict[str, Any] = {

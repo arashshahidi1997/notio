@@ -11,13 +11,13 @@ server = FastMCP("notio")
 
 
 @server.tool("note_list")
-def note_list_tool(note_type: str = "", limit: int = 20) -> dict:
-    """List recent notes, optionally filtered by type."""
+def note_list_tool(note_type: str = "", series: str = "", limit: int = 20) -> dict:
+    """List recent notes, optionally filtered by type and/or series."""
     try:
         from notio.query import list_notes
 
         root = get_notio_root()
-        notes = list_notes(root, note_type=note_type or None, limit=limit)
+        notes = list_notes(root, note_type=note_type or None, series=series or None, limit=limit)
         return json_dict({"notes": notes, "count": len(notes)})
     except Exception as exc:
         return json_dict({"error": str(exc)})
@@ -49,14 +49,27 @@ def note_read_tool(path: str) -> dict:
         return json_dict({"error": str(exc)})
 
 
+@server.tool("note_resolve")
+def note_resolve_tool(note_id: str) -> dict:
+    """Resolve a note by its timestamp ID, capture ID, or filename fragment."""
+    try:
+        from notio.query import resolve_note
+
+        root = get_notio_root()
+        note = resolve_note(root, note_id)
+        return json_dict(note or {"error": f"no note matching '{note_id}'"})
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
 @server.tool("note_search")
-def note_search_tool(query: str, note_type: str = "", limit: int = 10) -> dict:
-    """Search notes by keyword matching against title, tags, and content."""
+def note_search_tool(query: str, note_type: str = "", series: str = "", limit: int = 10) -> dict:
+    """Search notes by keyword matching against title, tags, series, and content."""
     try:
         from notio.query import search_notes
 
         root = get_notio_root()
-        notes = search_notes(root, query, note_type=note_type or None, limit=limit)
+        notes = search_notes(root, query, note_type=note_type or None, series=series or None, limit=limit)
         return json_dict({"notes": notes, "count": len(notes)})
     except Exception as exc:
         return json_dict({"error": str(exc)})
@@ -127,20 +140,29 @@ def note_create_tool(
     owner: str = "",
     title: str = "",
     date: str = "",
+    series: str = "",
+    refs: str = "",
 ) -> dict:
-    """Create a new note of the given type."""
+    """Create a new note of the given type. Pass refs as a JSON array, e.g. '[{"note": "idea-arash-20260211"}]'."""
     try:
+        import json as _json
         from notio.config import load_config
         from notio.core import create_note
 
         root = get_notio_root()
         config = load_config(root)
+        extra_fm: dict = {}
+        if series:
+            extra_fm["series"] = series
+        if refs:
+            extra_fm["refs"] = _json.loads(refs)
         path = create_note(
             config,
             note_type,
             owner=owner or None,
             title=title or None,
             note_date=date or None,
+            extra_frontmatter=extra_fm or None,
         )
         return json_dict({"path": str(path.relative_to(root)), "type": note_type})
     except Exception as exc:

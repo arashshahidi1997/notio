@@ -7,6 +7,8 @@ actionable: true
 prompt: ""
 source_note: ""
 project_primary: ""
+series: ""
+refs: []
 tags: [task]
 ---
 

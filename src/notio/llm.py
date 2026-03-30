@@ -1,13 +1,18 @@
-"""LLM integration via Ollama for note enrichment and linking.
+"""LLM integration for note enrichment and linking.
 
 Used for:
 - Structuring raw transcripts into well-organized note bodies
 - Suggesting wikilinks to related notes in the same project
 
-Config: OLLAMA_URL env var, or [tool.notio.ollama] in pyproject.toml / notio.toml.
-Falls back gracefully if Ollama is unreachable.
+Backends:
+- **claude** (default): Uses ``claude -p`` CLI with OAuth auth.
+- **ollama**: Local Ollama server, configured via OLLAMA_URL env var
+  or ``[tool.notio.ollama]`` in notio.toml / pyproject.toml.
 
-No dependencies beyond urllib (stdlib).
+Config: ``[tool.notio.llm]`` in notio.toml / pyproject.toml sets ``backend``.
+Falls back gracefully if the chosen backend is unreachable.
+
+No dependencies beyond stdlib (urllib, subprocess).
 """
 
 from __future__ import annotations
@@ -15,6 +20,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
+import subprocess
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
@@ -23,73 +30,149 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-_DEFAULTS = {
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+
+_OLLAMA_DEFAULTS = {
     "url": "http://theta:11434",
     "model": "llama3",
     "timeout": 180,
 }
 
+_CLAUDE_DEFAULTS = {
+    "model": "sonnet",
+    "timeout": 120,
+}
+
 
 @dataclass
-class OllamaConfig:
-    url: str
-    model: str
-    timeout: int
+class LLMConfig:
+    """Unified LLM configuration supporting multiple backends."""
+    backend: str = "claude"  # "claude" or "ollama"
+    # Ollama settings
+    ollama_url: str = _OLLAMA_DEFAULTS["url"]
+    ollama_model: str = _OLLAMA_DEFAULTS["model"]
+    ollama_timeout: int = _OLLAMA_DEFAULTS["timeout"]
+    # Claude settings
+    claude_model: str = _CLAUDE_DEFAULTS["model"]
+    claude_timeout: int = _CLAUDE_DEFAULTS["timeout"]
 
     @property
     def generate_url(self) -> str:
-        return f"{self.url.rstrip('/')}/api/generate"
+        """Ollama generate endpoint (kept for backwards compat)."""
+        return f"{self.ollama_url.rstrip('/')}/api/generate"
+
+
+# Backwards-compatible alias
+OllamaConfig = LLMConfig
 
 
 def load_config(
     root: Optional[Path] = None,
-) -> OllamaConfig:
-    """Load Ollama config from env → notio.toml → pyproject.toml → defaults."""
-    url = os.environ.get("OLLAMA_URL")
-    model = None
-    timeout = None
+) -> LLMConfig:
+    """Load LLM config from env → notio.toml → pyproject.toml → defaults."""
+    backend = os.environ.get("NOTIO_LLM_BACKEND")
+    ollama_url = os.environ.get("OLLAMA_URL")
+    ollama_model = None
+    ollama_timeout = None
+    claude_model = None
+    claude_timeout = None
 
-    # Try notio.toml
     if root:
-        cfg = _load_from_toml(root / "notio.toml") or _load_from_pyproject(root / "pyproject.toml")
-        if cfg:
-            url = url or cfg.get("url")
-            model = cfg.get("model")
-            timeout = cfg.get("timeout")
+        # New unified [llm] section
+        llm_cfg = _load_section(root, "llm")
+        if llm_cfg:
+            backend = backend or llm_cfg.get("backend")
+            claude_model = llm_cfg.get("claude_model")
+            claude_timeout = llm_cfg.get("claude_timeout")
+        # Legacy [ollama] section
+        ollama_cfg = _load_section(root, "ollama")
+        if ollama_cfg:
+            ollama_url = ollama_url or ollama_cfg.get("url")
+            ollama_model = ollama_cfg.get("model")
+            ollama_timeout = ollama_cfg.get("timeout")
 
-    return OllamaConfig(
-        url=url or _DEFAULTS["url"],
-        model=model or _DEFAULTS["model"],
-        timeout=int(timeout or _DEFAULTS["timeout"]),
+    return LLMConfig(
+        backend=backend or "claude",
+        ollama_url=ollama_url or _OLLAMA_DEFAULTS["url"],
+        ollama_model=ollama_model or _OLLAMA_DEFAULTS["model"],
+        ollama_timeout=int(ollama_timeout or _OLLAMA_DEFAULTS["timeout"]),
+        claude_model=claude_model or _CLAUDE_DEFAULTS["model"],
+        claude_timeout=int(claude_timeout or _CLAUDE_DEFAULTS["timeout"]),
     )
 
 
-def _load_from_toml(path: Path) -> Optional[Dict[str, Any]]:
+def _load_section(root: Path, section: str) -> Optional[Dict[str, Any]]:
+    """Load a [tool.notio.<section>] from notio.toml or pyproject.toml."""
+    cfg = _load_from_toml(root / "notio.toml", section)
+    if cfg:
+        return cfg
+    return _load_from_pyproject(root / "pyproject.toml", section)
+
+
+def _load_from_toml(path: Path, section: str = "ollama") -> Optional[Dict[str, Any]]:
     if not path.exists():
         return None
     try:
         import tomllib
         data = tomllib.loads(path.read_text(encoding="utf-8"))
-        return data.get("ollama")
+        return data.get(section)
     except Exception:
         return None
 
 
-def _load_from_pyproject(path: Path) -> Optional[Dict[str, Any]]:
+def _load_from_pyproject(path: Path, section: str = "ollama") -> Optional[Dict[str, Any]]:
     if not path.exists():
         return None
     try:
         import tomllib
         data = tomllib.loads(path.read_text(encoding="utf-8"))
-        return data.get("tool", {}).get("notio", {}).get("ollama")
+        return data.get("tool", {}).get("notio", {}).get(section)
     except Exception:
         return None
 
 
-def _call_ollama(config: OllamaConfig, prompt: str, max_tokens: int = 512) -> Optional[str]:
+# ---------------------------------------------------------------------------
+# Backend: Claude CLI (``claude -p``)
+# ---------------------------------------------------------------------------
+
+def _call_claude(config: LLMConfig, prompt: str, max_tokens: int = 1024) -> Optional[str]:
+    """Call ``claude -p`` (print mode) and return the response, or None on failure."""
+    claude_bin = shutil.which("claude")
+    if claude_bin is None:
+        logger.warning("claude CLI not found on PATH")
+        return None
+
+    cmd = [claude_bin, "-p", "--model", config.claude_model, "--max-turns", "1"]
+    try:
+        result = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=config.claude_timeout,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        logger.warning("claude CLI returned %d: %s", result.returncode, result.stderr[:200])
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("claude CLI timed out after %ds", config.claude_timeout)
+        return None
+    except (OSError, FileNotFoundError) as exc:
+        logger.warning("claude CLI call failed: %s", exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Backend: Ollama
+# ---------------------------------------------------------------------------
+
+def _call_ollama(config: LLMConfig, prompt: str, max_tokens: int = 512) -> Optional[str]:
     """Send a prompt to Ollama and return the response, or None on failure."""
     payload = json.dumps({
-        "model": config.model,
+        "model": config.ollama_model,
         "prompt": prompt,
         "stream": False,
         "keep_alive": "30m",
@@ -104,12 +187,23 @@ def _call_ollama(config: OllamaConfig, prompt: str, max_tokens: int = 512) -> Op
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=config.timeout) as resp:
+        with urllib.request.urlopen(req, timeout=config.ollama_timeout) as resp:
             body = json.loads(resp.read())
         return body.get("response", "").strip()
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
         logger.warning("Ollama call failed: %s", exc)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Unified dispatch
+# ---------------------------------------------------------------------------
+
+def _call_llm(config: LLMConfig, prompt: str, max_tokens: int = 1024) -> Optional[str]:
+    """Dispatch to the configured backend."""
+    if config.backend == "ollama":
+        return _call_ollama(config, prompt, max_tokens)
+    return _call_claude(config, prompt, max_tokens)
 
 
 def _parse_json_response(raw: str) -> Optional[Dict[str, Any]]:
@@ -238,7 +332,7 @@ def enrich_body(
     transcript: str,
     title: str,
     kind: str,
-    config: Optional[OllamaConfig] = None,
+    config: Optional[LLMConfig] = None,
 ) -> Optional[str]:
     """Use LLM to structure a transcript into a well-organized note body.
 
@@ -250,7 +344,7 @@ def enrich_body(
     prompt_template = _ENRICH_PROMPTS.get(kind, _ENRICH_PROMPTS["idea"])
     prompt = prompt_template.format(transcript=transcript, title=title)
 
-    raw = _call_ollama(config, prompt, max_tokens=1024)
+    raw = _call_llm(config, prompt, max_tokens=1024)
     if raw is None:
         return None
 
@@ -292,7 +386,7 @@ def suggest_links(
     note_path: Path,
     note_content: str,
     sibling_notes: List[Dict[str, Any]],
-    config: Optional[OllamaConfig] = None,
+    config: Optional[LLMConfig] = None,
 ) -> Optional[List[Dict[str, str]]]:
     """Suggest wikilinks from this note to related sibling notes.
 
@@ -323,7 +417,7 @@ Return ONLY a JSON object:
 
 Only suggest links where there is a genuine topical connection. Return an empty list if nothing is related. Maximum 5 links."""
 
-    raw = _call_ollama(config, prompt, max_tokens=512)
+    raw = _call_llm(config, prompt, max_tokens=512)
     if raw is None:
         return None
 
@@ -338,12 +432,15 @@ Only suggest links where there is a genuine topical connection. Return an empty 
 # Status check
 # ---------------------------------------------------------------------------
 
-def available(config: Optional[OllamaConfig] = None) -> bool:
-    """Check if Ollama is reachable."""
+def available(config: Optional[LLMConfig] = None) -> bool:
+    """Check if the configured LLM backend is reachable."""
     if config is None:
         config = load_config()
+    if config.backend == "claude":
+        return shutil.which("claude") is not None
+    # Ollama
     try:
-        url = f"{config.url.rstrip('/')}/api/tags"
+        url = f"{config.ollama_url.rstrip('/')}/api/tags"
         req = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=5) as resp:
             return resp.status == 200
@@ -351,12 +448,14 @@ def available(config: Optional[OllamaConfig] = None) -> bool:
         return False
 
 
-def warmup(config: Optional[OllamaConfig] = None) -> bool:
-    """Pre-load the model into memory. Returns True on success."""
+def warmup(config: Optional[LLMConfig] = None) -> bool:
+    """Pre-load the model into memory. Returns True on success (ollama only)."""
     if config is None:
         config = load_config()
+    if config.backend == "claude":
+        return True  # no warmup needed
     payload = json.dumps({
-        "model": config.model,
+        "model": config.ollama_model,
         "prompt": "",
         "keep_alive": "30m",
     }).encode()
@@ -367,7 +466,7 @@ def warmup(config: Optional[OllamaConfig] = None) -> bool:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=config.timeout) as resp:
+        with urllib.request.urlopen(req, timeout=config.ollama_timeout) as resp:
             resp.read()
         return True
     except (urllib.error.URLError, TimeoutError, OSError):

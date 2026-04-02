@@ -174,6 +174,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("name", help="Manuscript name")
     p = ms_sub.add_parser("assemble", help="Generate assembled markdown only")
     p.add_argument("name", help="Manuscript name")
+    ms_sub.add_parser("master-list", help="List master documents")
+    p = ms_sub.add_parser("master-build", help="Build a master document")
+    p.add_argument("name", help="Master document name (subdirectory under docs/)")
+    p.add_argument("--format", default="pdf", choices=["pdf", "latex", "md", "docx", "html"],
+                   help="Output format (default: pdf)")
 
     # -- mcp --
     sub.add_parser("mcp", help="Start the FastMCP server (stdio)")
@@ -353,6 +358,20 @@ def _cmd_links(args: argparse.Namespace, root: Path, config) -> int:
 def _cmd_manuscript(args: argparse.Namespace, root: Path) -> int:
     """Handle manuscript subcommands."""
     import json
+
+    # Master document commands don't need manuscript name/dir
+    if args.manuscript_command == "master-list":
+        from notio.manuscript.master import find_master_files
+        masters = find_master_files(root)
+        print(json.dumps({"masters": masters, "count": len(masters)}, indent=2))
+        return 0
+
+    if args.manuscript_command == "master-build":
+        from notio.manuscript.master import build_master
+        fmt = getattr(args, "format", "pdf")
+        output = build_master(root, args.name, format=fmt)
+        print(output)
+        return 0
 
     name = args.name
     base_dir = root / "docs" / "manuscript" / name

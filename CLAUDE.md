@@ -22,6 +22,11 @@ notio toc [<type>|--all]                # Regenerate indexes
 notio diataxis init [--mkdocs]         # Scaffold Diataxis docs structure
 notio diataxis add <section> <slug>    # Add a page to a section
 notio diataxis toc [<section>|--all]   # Rebuild section indexes
+notio manuscript init <name>               # Scaffold manuscript
+notio manuscript build <name> [--format]   # Assemble + render
+notio manuscript validate <name>           # Run all checks
+notio manuscript status <name>             # Show sections, figures
+notio manuscript assemble <name>           # Assembled markdown only
 notio mcp                              # Start FastMCP server (stdio)
 
 # Testing and building
@@ -49,7 +54,8 @@ Source modules in `src/notio/`:
 - **core.py** — Note business logic: template rendering (`string.Template` with `${variable}` syntax), frontmatter parsing (regex + YAML), note file creation, and index generation
 - **diataxis.py** — Diataxis documentation scaffolding: section templates, page creation, and section index generation. Reuses `core.parse_frontmatter`
 - **query.py** — Read-only note query functions (`list_notes`, `latest_note`, `read_note`). Exported from `notio.__init__` for library use by projio
-- **mcp/** — FastMCP server package (optional, requires `fastmcp`). Exposes all notio operations as MCP tools. Uses `NOTIO_ROOT` env var for project root resolution
+- **manuscript/** — Manuscript assembly subpackage: `schema.py` (ManuscriptSpec dataclass, YAML loading, scaffolding), `assembly.py` (section loading, frontmatter stripping, heading adjustment, concatenation), `render.py` (pandoc-based rendering to PDF/LaTeX/etc.), `figures.py` (figio figure resolution and insertion), `validate.py` (section/citation/figure/pandoc validation). Manuscripts live under `docs/manuscript/<name>/`
+- **mcp/** — FastMCP server package (optional, requires `fastmcp`). Exposes all notio operations as MCP tools. Uses `NOTIO_ROOT` env var for project root resolution. Includes manuscript tools: `manuscript_init`, `manuscript_list`, `manuscript_status`, `manuscript_build`, `manuscript_validate`, `manuscript_assemble`, `manuscript_figure_insert`
 
 Default note types are four core types: **idea**, **issue**, **task**, **meeting** (all event mode). Projects can add custom types (including period-mode types like `daily`, `weekly`) via `notio.toml`.
 

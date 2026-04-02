@@ -266,6 +266,235 @@ def diataxis_toc_tool(section: str = "") -> dict:
 # --- Config tools ---
 
 
+# --- Manuscript tools ---
+
+
+@server.tool("manuscript_init")
+def manuscript_init_tool(name: str, template: str = "generic") -> dict:
+    """Scaffold a new manuscript with default sections."""
+    try:
+        from notio.manuscript.schema import scaffold_spec
+
+        root = get_notio_root()
+        base_dir = root / "docs" / "manuscript" / name
+        base_dir.mkdir(parents=True, exist_ok=True)
+        spec = scaffold_spec(name, base_dir)
+        return json_dict({
+            "name": spec.name,
+            "title": spec.title,
+            "path": str(base_dir.relative_to(root)),
+            "sections": [s.key for s in spec.sections],
+            "spec_file": str((base_dir / "manuscript.yml").relative_to(root)),
+        })
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
+@server.tool("manuscript_list")
+def manuscript_list_tool() -> dict:
+    """List all manuscripts in the project."""
+    try:
+        root = get_notio_root()
+        manuscript_dir = root / "docs" / "manuscript"
+        if not manuscript_dir.is_dir():
+            return json_dict({"manuscripts": [], "count": 0})
+
+        manuscripts = []
+        for child in sorted(manuscript_dir.iterdir()):
+            spec_path = child / "manuscript.yml"
+            if child.is_dir() and spec_path.is_file():
+                from notio.manuscript.schema import ManuscriptSpec
+                spec = ManuscriptSpec.from_yaml(spec_path)
+                manuscripts.append({
+                    "name": spec.name,
+                    "title": spec.title,
+                    "path": str(child.relative_to(root)),
+                    "sections": len(spec.sections),
+                    "formats": spec.render.formats,
+                })
+        return json_dict({"manuscripts": manuscripts, "count": len(manuscripts)})
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
+@server.tool("manuscript_status")
+def manuscript_status_tool(name: str) -> dict:
+    """Show manuscript sections, figures, and completion status."""
+    try:
+        root = get_notio_root()
+        base_dir = root / "docs" / "manuscript" / name
+        spec_path = base_dir / "manuscript.yml"
+        if not spec_path.is_file():
+            return json_dict({"error": f"Manuscript '{name}' not found"})
+
+        from notio.manuscript.schema import ManuscriptSpec
+        from notio.manuscript.assembly import strip_frontmatter
+        from notio.manuscript.figures import resolve_figure_paths, validate_figures
+
+        spec = ManuscriptSpec.from_yaml(spec_path)
+
+        sections_status = []
+        for entry in sorted(spec.sections, key=lambda s: s.order):
+            section_path = base_dir / entry.path
+            exists = section_path.is_file()
+            word_count = 0
+            if exists:
+                text = section_path.read_text(encoding="utf-8")
+                body = strip_frontmatter(text)
+                word_count = len(body.split())
+            sections_status.append({
+                "key": entry.key,
+                "path": entry.path,
+                "order": entry.order,
+                "exists": exists,
+                "word_count": word_count,
+            })
+
+        missing_figs = validate_figures(spec, base_dir)
+        resolved_figs = resolve_figure_paths(spec, base_dir)
+
+        return json_dict({
+            "name": spec.name,
+            "title": spec.title,
+            "sections": sections_status,
+            "total_words": sum(s["word_count"] for s in sections_status),
+            "figures": {
+                "total": len(spec.figures.mappings),
+                "resolved": len(resolved_figs),
+                "missing": missing_figs,
+            },
+            "render_formats": spec.render.formats,
+        })
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
+@server.tool("manuscript_build")
+def manuscript_build_tool(name: str, format: str = "pdf") -> dict:
+    """Assemble sections and render to PDF/LaTeX/Markdown."""
+    try:
+        root = get_notio_root()
+        base_dir = root / "docs" / "manuscript" / name
+        spec_path = base_dir / "manuscript.yml"
+        if not spec_path.is_file():
+            return json_dict({"error": f"Manuscript '{name}' not found"})
+
+        from notio.manuscript.schema import ManuscriptSpec
+        from notio.manuscript.render import render
+
+        spec = ManuscriptSpec.from_yaml(spec_path)
+        outputs = render(spec, base_dir, formats=[format])
+        return json_dict({
+            "name": spec.name,
+            "format": format,
+            "outputs": [str(p.relative_to(root)) for p in outputs],
+        })
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
+@server.tool("manuscript_validate")
+def manuscript_validate_tool(name: str) -> dict:
+    """Validate citations, figures, sections, and pandoc availability."""
+    try:
+        root = get_notio_root()
+        base_dir = root / "docs" / "manuscript" / name
+        spec_path = base_dir / "manuscript.yml"
+        if not spec_path.is_file():
+            return json_dict({"error": f"Manuscript '{name}' not found"})
+
+        from notio.manuscript.schema import ManuscriptSpec
+        from notio.manuscript.validate import validate_manuscript
+
+        spec = ManuscriptSpec.from_yaml(spec_path)
+        result = validate_manuscript(spec, base_dir)
+        return json_dict({
+            "name": spec.name,
+            "valid": result.valid,
+            "errors": result.errors,
+            "warnings": result.warnings,
+        })
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
+@server.tool("manuscript_assemble")
+def manuscript_assemble_tool(name: str) -> dict:
+    """Generate assembled markdown without rendering."""
+    try:
+        root = get_notio_root()
+        base_dir = root / "docs" / "manuscript" / name
+        spec_path = base_dir / "manuscript.yml"
+        if not spec_path.is_file():
+            return json_dict({"error": f"Manuscript '{name}' not found"})
+
+        from notio.manuscript.schema import ManuscriptSpec
+        from notio.manuscript.assembly import write_assembled
+
+        spec = ManuscriptSpec.from_yaml(spec_path)
+        output_path = write_assembled(spec, base_dir)
+        return json_dict({
+            "name": spec.name,
+            "output": str(output_path.relative_to(root)),
+        })
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
+@server.tool("manuscript_figure_insert")
+def manuscript_figure_insert_tool(name: str, section: str, figure_id: str, position: str = "end") -> dict:
+    """Insert a figio figure reference into a manuscript section."""
+    try:
+        root = get_notio_root()
+        base_dir = root / "docs" / "manuscript" / name
+        spec_path = base_dir / "manuscript.yml"
+        if not spec_path.is_file():
+            return json_dict({"error": f"Manuscript '{name}' not found"})
+
+        from notio.manuscript.schema import ManuscriptSpec
+        spec = ManuscriptSpec.from_yaml(spec_path)
+
+        target = None
+        for entry in spec.sections:
+            if entry.key == section:
+                target = entry
+                break
+        if target is None:
+            return json_dict({"error": f"Section '{section}' not found in manuscript '{name}'"})
+
+        section_path = base_dir / target.path
+        if not section_path.is_file():
+            return json_dict({"error": f"Section file not found: {target.path}"})
+
+        fig_ref = f"\n![](fig:{figure_id})\n"
+        text = section_path.read_text(encoding="utf-8")
+
+        if position == "start":
+            from notio.manuscript.assembly import FRONTMATTER_RE
+            match = FRONTMATTER_RE.match(text)
+            if match:
+                insert_pos = match.end()
+                text = text[:insert_pos] + fig_ref + text[insert_pos:]
+            else:
+                text = fig_ref + text
+        else:
+            text = text.rstrip() + "\n" + fig_ref
+
+        section_path.write_text(text, encoding="utf-8")
+        return json_dict({
+            "name": name,
+            "section": section,
+            "figure_id": figure_id,
+            "position": position,
+            "path": str(section_path.relative_to(root)),
+        })
+    except Exception as exc:
+        return json_dict({"error": str(exc)})
+
+
+# --- Config tools ---
+
+
 @server.tool("config_show")
 def config_show_tool() -> dict:
     """Show the current notio configuration."""

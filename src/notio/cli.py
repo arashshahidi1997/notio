@@ -159,6 +159,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("section", nargs="?")
     p.add_argument("--all", action="store_true")
 
+    # -- manuscript --
+    ms = sub.add_parser("manuscript", help="Manage manuscripts")
+    ms_sub = ms.add_subparsers(dest="manuscript_command", required=True)
+    p = ms_sub.add_parser("init", help="Scaffold a new manuscript")
+    p.add_argument("name", help="Manuscript name")
+    p = ms_sub.add_parser("build", help="Assemble and render manuscript")
+    p.add_argument("name", help="Manuscript name")
+    p.add_argument("--format", default="pdf", choices=["pdf", "latex", "md", "docx", "html"],
+                   help="Output format (default: pdf)")
+    p = ms_sub.add_parser("validate", help="Validate manuscript")
+    p.add_argument("name", help="Manuscript name")
+    p = ms_sub.add_parser("status", help="Show manuscript status")
+    p.add_argument("name", help="Manuscript name")
+    p = ms_sub.add_parser("assemble", help="Generate assembled markdown only")
+    p.add_argument("name", help="Manuscript name")
+
     # -- mcp --
     sub.add_parser("mcp", help="Start the FastMCP server (stdio)")
 
@@ -239,6 +255,10 @@ def main(argv: list[str] | None = None) -> int:
         from notio.mcp.server import main as mcp_main
         mcp_main()
         return 0
+
+    # -- manuscript --
+    if args.command == "manuscript":
+        return _cmd_manuscript(args, root)
 
     # -- diataxis --
     if args.command == "diataxis":
@@ -328,6 +348,86 @@ def _cmd_links(args: argparse.Namespace, root: Path, config) -> int:
         print(f"\nAppended {len(links)} links to {args.note_path}")
 
     return 0
+
+
+def _cmd_manuscript(args: argparse.Namespace, root: Path) -> int:
+    """Handle manuscript subcommands."""
+    import json
+
+    name = args.name
+    base_dir = root / "docs" / "manuscript" / name
+
+    if args.manuscript_command == "init":
+        from notio.manuscript.schema import scaffold_spec
+        base_dir.mkdir(parents=True, exist_ok=True)
+        spec = scaffold_spec(name, base_dir)
+        print(json.dumps({
+            "name": spec.name,
+            "title": spec.title,
+            "path": str(base_dir.relative_to(root)),
+            "sections": [s.key for s in spec.sections],
+        }, indent=2))
+        return 0
+
+    spec_path = base_dir / "manuscript.yml"
+    if not spec_path.is_file():
+        print(f"Manuscript '{name}' not found at {spec_path}", file=sys.stderr)
+        return 1
+
+    from notio.manuscript.schema import ManuscriptSpec
+    spec = ManuscriptSpec.from_yaml(spec_path)
+
+    if args.manuscript_command == "status":
+        from notio.manuscript.assembly import strip_frontmatter
+        from notio.manuscript.figures import resolve_figure_paths, validate_figures
+
+        sections_info = []
+        for entry in sorted(spec.sections, key=lambda s: s.order):
+            sp = base_dir / entry.path
+            exists = sp.is_file()
+            wc = 0
+            if exists:
+                body = strip_frontmatter(sp.read_text(encoding="utf-8"))
+                wc = len(body.split())
+            sections_info.append({"key": entry.key, "order": entry.order, "exists": exists, "words": wc})
+
+        missing_figs = validate_figures(spec, base_dir)
+        resolved_figs = resolve_figure_paths(spec, base_dir)
+        print(json.dumps({
+            "name": spec.name,
+            "title": spec.title,
+            "sections": sections_info,
+            "total_words": sum(s["words"] for s in sections_info),
+            "figures_resolved": len(resolved_figs),
+            "figures_missing": missing_figs,
+        }, indent=2))
+        return 0
+
+    if args.manuscript_command == "validate":
+        from notio.manuscript.validate import validate_manuscript
+        result = validate_manuscript(spec, base_dir)
+        print(json.dumps({
+            "valid": result.valid,
+            "errors": result.errors,
+            "warnings": result.warnings,
+        }, indent=2))
+        return 0 if result.valid else 1
+
+    if args.manuscript_command == "assemble":
+        from notio.manuscript.assembly import write_assembled
+        output_path = write_assembled(spec, base_dir)
+        print(output_path)
+        return 0
+
+    if args.manuscript_command == "build":
+        from notio.manuscript.render import render
+        fmt = getattr(args, "format", "pdf")
+        outputs = render(spec, base_dir, formats=[fmt])
+        for p in outputs:
+            print(p)
+        return 0
+
+    return 2
 
 
 def _cmd_llm(root: Path) -> int:

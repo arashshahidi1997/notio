@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 from notio.manuscript.assembly import write_assembled
-from notio.manuscript.schema import ManuscriptSpec
+from notio.manuscript.schema import ManuscriptSpec, resolve_render_config
 
 
 def find_pandoc() -> Path | None:
@@ -23,33 +23,40 @@ def build_pandoc_command(
     spec: ManuscriptSpec,
     base_dir: Path,
 ) -> list[str]:
-    """Build the pandoc CLI argument list."""
+    """Build the pandoc CLI argument list using resolved render config."""
+    resolved = resolve_render_config(spec, base_dir)
     cmd = ["pandoc", str(input_path), "-o", str(output_path)]
 
+    # PDF engine
+    if resolved.pdf_engine and fmt == "pdf":
+        cmd.extend([f"--pdf-engine={resolved.pdf_engine}"])
+
     # Bibliography
-    bib_file = spec.bibliography.bib_file
-    if bib_file:
-        bib_path = base_dir / bib_file
+    if resolved.bib_file:
+        bib_path = base_dir / resolved.bib_file
         if bib_path.is_file():
             cmd.extend(["--citeproc", f"--bibliography={bib_path}"])
-    csl = spec.bibliography.csl
-    if csl:
-        csl_path = base_dir / csl
+    if resolved.csl:
+        csl_path = base_dir / resolved.csl
         if csl_path.is_file():
             cmd.extend([f"--csl={csl_path}"])
 
     # Template
-    if spec.render.template:
-        template_path = base_dir / spec.render.template
+    if resolved.template:
+        template_path = base_dir / resolved.template
         if template_path.is_file():
             cmd.extend([f"--template={template_path}"])
 
     # Variables
-    for k, v in spec.render.variables.items():
+    for k, v in resolved.variables.items():
         cmd.extend(["-V", f"{k}={v}"])
 
+    # Resource path
+    if resolved.resource_path:
+        cmd.extend([f"--resource-path={':'.join(resolved.resource_path)}"])
+
     # Extra args
-    cmd.extend(spec.render.pandoc_args)
+    cmd.extend(resolved.pandoc_args)
 
     return cmd
 
@@ -100,16 +107,24 @@ def render(
 ) -> list[Path]:
     """Assemble sections then render via pandoc.
 
+    Uses resolve_render_config to merge project defaults with manuscript overrides.
     Returns list of output file paths.
     """
+    resolved = resolve_render_config(spec, base_dir)
     assembled_path = write_assembled(spec, base_dir)
-    output_dir = base_dir / spec.render.output_dir
+    output_dir = base_dir / resolved.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    target_formats = formats or spec.render.formats
-    bib_path = (base_dir / spec.bibliography.bib_file) if spec.bibliography.bib_file else None
-    csl_path = (base_dir / spec.bibliography.csl) if spec.bibliography.csl else None
-    template_path = (base_dir / spec.render.template) if spec.render.template else None
+    target_formats = formats or resolved.formats
+    bib_path = (base_dir / resolved.bib_file) if resolved.bib_file else None
+    csl_path = (base_dir / resolved.csl) if resolved.csl else None
+    template_path = (base_dir / resolved.template) if resolved.template else None
+
+    extra_args = list(resolved.pandoc_args)
+    if resolved.pdf_engine:
+        extra_args = [f"--pdf-engine={resolved.pdf_engine}"] + extra_args
+    if resolved.resource_path:
+        extra_args.append(f"--resource-path={':'.join(resolved.resource_path)}")
 
     outputs: list[Path] = []
     for fmt in target_formats:
@@ -121,8 +136,8 @@ def render(
             bib_file=bib_path,
             csl=csl_path,
             template=template_path,
-            extra_args=spec.render.pandoc_args,
-            variables=spec.render.variables,
+            extra_args=extra_args,
+            variables=resolved.variables,
         )
         outputs.append(output_path)
 

@@ -52,6 +52,24 @@ class RenderConfig:
 
 
 @dataclass
+class ResolvedRender:
+    """Fully resolved render settings (project defaults merged with manuscript overrides)."""
+
+    bib_file: str = ""
+    csl: str = ""
+    pdf_engine: str = "xelatex"
+    lua_filter: str = ""
+    conda_env: str = ""
+    resource_path: list[str] = field(default_factory=list)
+    # Manuscript-specific settings carried through
+    output_dir: str = "_build/"
+    formats: list[str] = field(default_factory=lambda: ["pdf"])
+    template: str | None = None
+    pandoc_args: list[str] = field(default_factory=list)
+    variables: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class ManuscriptSpec:
     name: str
     title: str = ""
@@ -60,6 +78,7 @@ class ManuscriptSpec:
     bibliography: BibConfig = field(default_factory=BibConfig)
     figures: FiguresConfig = field(default_factory=FiguresConfig)
     render: RenderConfig = field(default_factory=RenderConfig)
+    defaults_from: str = "../../.projio/render.yml"
 
     @classmethod
     def from_yaml(cls, path: Path) -> ManuscriptSpec:
@@ -121,6 +140,7 @@ class ManuscriptSpec:
             bibliography=bib,
             figures=figures,
             render=render_cfg,
+            defaults_from=data.get("defaults_from", "../../.projio/render.yml"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -159,7 +179,52 @@ class ManuscriptSpec:
             "pandoc_args": self.render.pandoc_args,
             "variables": self.render.variables,
         }
+        if self.defaults_from:
+            result["defaults_from"] = self.defaults_from
         return result
+
+
+def _load_project_render_yml(path: Path) -> dict[str, Any]:
+    """Load .projio/render.yml as a plain dict. Returns {} if not found."""
+    import yaml
+
+    if not path.is_file():
+        return {}
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def resolve_render_config(spec: ManuscriptSpec, base_dir: Path) -> ResolvedRender:
+    """Merge project render.yml defaults with manuscript-level overrides.
+
+    Priority: manuscript.yml values win when non-empty, otherwise fall back
+    to project defaults from .projio/render.yml.
+    """
+    project_defaults: dict[str, Any] = {}
+    if spec.defaults_from:
+        render_yml_path = (base_dir / spec.defaults_from).resolve()
+        project_defaults = _load_project_render_yml(render_yml_path)
+
+    # Resolve bibliography: manuscript wins if non-empty
+    bib_file = spec.bibliography.bib_file or project_defaults.get("bibliography", "")
+    csl = spec.bibliography.csl or project_defaults.get("csl", "")
+    pdf_engine = project_defaults.get("pdf_engine", "xelatex")
+    lua_filter = project_defaults.get("lua_filter", "")
+    conda_env = project_defaults.get("conda_env", "")
+    resource_path = project_defaults.get("resource_path", [])
+
+    return ResolvedRender(
+        bib_file=bib_file,
+        csl=csl,
+        pdf_engine=pdf_engine,
+        lua_filter=lua_filter,
+        conda_env=conda_env,
+        resource_path=resource_path,
+        output_dir=spec.render.output_dir,
+        formats=spec.render.formats,
+        template=spec.render.template,
+        pandoc_args=spec.render.pandoc_args,
+        variables=spec.render.variables,
+    )
 
 
 DEFAULT_SECTIONS = [
@@ -173,6 +238,10 @@ DEFAULT_SECTIONS = [
 
 def scaffold_spec(name: str, base_dir: Path) -> ManuscriptSpec:
     """Create a default ManuscriptSpec and write it along with section stubs.
+
+    If .projio/render.yml exists relative to base_dir, leaves bib/csl fields
+    empty (they'll inherit from project defaults) and sets defaults_from.
+    Otherwise fills in empty defaults.
 
     Returns the spec. Files are written under *base_dir*.
     """
@@ -195,10 +264,16 @@ def scaffold_spec(name: str, base_dir: Path) -> ManuscriptSpec:
             )
         entries.append(SectionEntry(key=key, path=rel, order=order))
 
+    # Check if project-level render.yml exists
+    defaults_from = "../../.projio/render.yml"
+    render_yml_path = (base_dir / defaults_from).resolve()
+    has_project_render = render_yml_path.is_file()
+
     spec = ManuscriptSpec(
         name=name,
         title=name.replace("-", " ").replace("_", " ").title(),
         sections=entries,
+        defaults_from=defaults_from if has_project_render else "",
     )
 
     spec_path = base_dir / "manuscript.yml"

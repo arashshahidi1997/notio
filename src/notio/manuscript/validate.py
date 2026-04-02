@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from notio.manuscript.schema import ManuscriptSpec
+from notio.manuscript.schema import ManuscriptSpec, resolve_render_config
 
 
 @dataclass
@@ -52,15 +52,17 @@ def validate_manuscript(spec: ManuscriptSpec, base_dir: Path) -> ValidationResul
         if gaps:
             result.warnings.append(f"Gaps in section order: {gaps}")
 
-    # --- Citation resolution ---
+    # --- Citation resolution (uses resolved config for project defaults) ---
+    resolved = resolve_render_config(spec, base_dir)
+    bib_file = resolved.bib_file
     bib_keys: set[str] = set()
-    if spec.bibliography.bib_file:
-        bib_path = base_dir / spec.bibliography.bib_file
+    if bib_file:
+        bib_path = base_dir / bib_file
         if bib_path.is_file():
             bib_text = bib_path.read_text(encoding="utf-8")
             bib_keys = set(re.findall(r"@\w+\{([^,\s]+)", bib_text))
         else:
-            result.warnings.append(f"Bibliography file not found: {spec.bibliography.bib_file}")
+            result.warnings.append(f"Bibliography file not found: {bib_file}")
 
     cited_keys: set[str] = set()
     for entry in spec.sections:
@@ -73,7 +75,7 @@ def validate_manuscript(spec: ManuscriptSpec, base_dir: Path) -> ValidationResul
         missing_cites = sorted(cited_keys - bib_keys)
         if missing_cites:
             result.warnings.append(f"Unresolved citations: {missing_cites}")
-    elif cited_keys and not bib_keys and not spec.bibliography.bib_file:
+    elif cited_keys and not bib_keys and not bib_file:
         result.warnings.append(
             f"Found {len(cited_keys)} citations but no bibliography configured"
         )

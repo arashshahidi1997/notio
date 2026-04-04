@@ -112,7 +112,7 @@ def build_master(
             cmd.extend([f"--csl={csl_path}"])
 
     # PDF engine
-    pdf_engine = config.get("pdf_engine", "xelatex")
+    pdf_engine = config.get("pdf_engine", "lualatex")
     if pdf_engine and format == "pdf":
         cmd.extend([f"--pdf-engine={pdf_engine}"])
 

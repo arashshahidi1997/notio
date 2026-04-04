@@ -66,8 +66,8 @@ def load_sections(spec: ManuscriptSpec, base_dir: Path) -> list[Section]:
 def assemble(spec: ManuscriptSpec, base_dir: Path) -> str:
     """Concatenate sections in order into a single Markdown document.
 
-    Strips frontmatter, adjusts heading levels, and inserts blank lines
-    between sections.
+    Strips frontmatter, adjusts heading levels, resolves figure references,
+    and inserts blank lines between sections.
     """
     sections = load_sections(spec, base_dir)
     parts: list[str] = []
@@ -90,7 +90,17 @@ def assemble(spec: ManuscriptSpec, base_dir: Path) -> str:
     for section in sections:
         parts.append(section.content.rstrip())
 
-    return "\n\n".join(parts) + "\n"
+    text = "\n\n".join(parts) + "\n"
+
+    # Resolve fig:<id> references to actual file paths
+    if spec.figures.mappings:
+        from notio.manuscript.figures import resolve_figure_paths, insert_figure_references
+
+        figures = resolve_figure_paths(spec, base_dir)
+        if figures:
+            text = insert_figure_references(text, figures, base_dir)
+
+    return text
 
 
 def write_assembled(spec: ManuscriptSpec, base_dir: Path) -> Path:

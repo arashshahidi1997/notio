@@ -86,7 +86,7 @@ figures:
 render:
   output_dir: _build/
   formats: [pdf]
-  pandoc_args: ["--pdf-engine=xelatex"]
+  pandoc_args: ["--pdf-engine=lualatex"]
 ```
 
 ## 3. Write section content
@@ -238,6 +238,101 @@ manuscript_build("my-paper", "pdf")      # render to PDF
 manuscript_figure_insert("my-paper",     # wire a figure into a section
     "methods", "fig-overview")
 ```
+
+## Master documents (plan, spec)
+
+Not everything is a manuscript. Plans, specs, and other ordered documents use a
+**dual-marker** pattern for simultaneous web (MkDocs) and print (Pandoc) output.
+These are handled separately from manuscripts.
+
+### How master documents work
+
+A master document at `docs/<name>/master.md` contains paired markers per section:
+
+```markdown
+[[plan/overview]]
+{% include-markdown "plan/overview.md" %}
+```
+
+- `[[wikilink]]` — MkDocs navigation (resolved by the `ezlinks` plugin)
+- `{% include-markdown %}` — content transclusion (resolved by the `include-markdown` plugin for MkDocs, and by `include.lua` Lua filter for Pandoc)
+
+### List master documents
+
+```bash
+notio manuscript master-list
+```
+
+Or via MCP:
+
+```
+master_list()
+```
+
+Returns each master document's name, path, and section count.
+
+### Build a master document
+
+```bash
+notio manuscript master-build plan --format pdf
+```
+
+Or via MCP:
+
+```
+master_build("plan", "pdf")
+```
+
+This invokes pandoc with the Lua transclusion filter (`include.lua`) and citeproc.
+Render settings come from `.projio/render.yml` (PDF engine, CSL, bibliography).
+
+### Generate a master.md from scratch
+
+If you have a list of section files and want to generate the dual-marker master.md:
+
+```
+master_generate("my-plan", [
+    {"path": "plan/overview.md", "title": "Overview"},
+    {"path": "plan/methods.md", "title": "Methods"},
+])
+```
+
+This produces a properly formatted master.md with both wikilink and include-markdown
+markers for each section.
+
+### Manuscript vs master document
+
+| | Manuscript | Master document |
+|---|---|---|
+| Primary output | PDF/LaTeX (pandoc) | Web (MkDocs) + print backup |
+| Assembly | Concatenation (no filter) | Lua transclusion filter |
+| Section management | `manuscript.yml` (ManuscriptSpec) | Hand-ordered in `master.md` |
+| Citations | Required (citeproc) | Optional |
+| Figures | figio-managed | Inline |
+| Config | `manuscript.yml` + `render.yml` | `.projio/render.yml` only |
+
+Use manuscripts for papers. Use master documents for plans, specs, and
+other documents where MkDocs navigation of individual sections matters.
+
+### Project render config
+
+Both manuscripts and master documents read render settings from
+`.projio/render.yml`:
+
+```yaml
+pdf_engine: lualatex
+csl: bib/csl/nature.csl
+bibliography: bib/project.bib
+lua_filter: .projio/filters/include.lua
+conda_env: labpy
+resource_path: [., docs, docs/assets, bib]
+```
+
+This is the single source of truth — no more scattered engine/CSL/env settings
+across Makefile, VSCode tasks, and pandoc-defaults.yaml.
+
+Manuscripts can override per-manuscript (e.g., different CSL for a different journal)
+via `manuscript.yml`. Master documents always use the project defaults.
 
 ## Full paper pipeline
 

@@ -27,6 +27,8 @@ notio manuscript build <name> [--format]   # Assemble + render
 notio manuscript validate <name>           # Run all checks
 notio manuscript status <name>             # Show sections, figures
 notio manuscript assemble <name>           # Assembled markdown only
+notio manuscript master-list               # List dual-marker master docs
+notio manuscript master-build <name> [--format]  # Build master doc (Lua filter)
 notio mcp                              # Start FastMCP server (stdio)
 
 # Testing and building
@@ -54,8 +56,10 @@ Source modules in `src/notio/`:
 - **core.py** — Note business logic: template rendering (`string.Template` with `${variable}` syntax), frontmatter parsing (regex + YAML), note file creation, and index generation
 - **diataxis.py** — Diataxis documentation scaffolding: section templates, page creation, and section index generation. Reuses `core.parse_frontmatter`
 - **query.py** — Read-only note query functions (`list_notes`, `latest_note`, `read_note`). Exported from `notio.__init__` for library use by projio
-- **manuscript/** — Manuscript assembly subpackage: `schema.py` (ManuscriptSpec dataclass, YAML loading, scaffolding), `assembly.py` (section loading, frontmatter stripping, heading adjustment, concatenation), `render.py` (pandoc-based rendering to PDF/LaTeX/etc.), `figures.py` (figio figure resolution and insertion), `validate.py` (section/citation/figure/pandoc validation). Manuscripts live under `docs/manuscript/<name>/`
-- **mcp/** — FastMCP server package (optional, requires `fastmcp`). Exposes all notio operations as MCP tools. Uses `NOTIO_ROOT` env var for project root resolution. Includes manuscript tools: `manuscript_init`, `manuscript_list`, `manuscript_status`, `manuscript_build`, `manuscript_validate`, `manuscript_assemble`, `manuscript_figure_insert`
+- **manuscript/** — Manuscript assembly subpackage. Two document types:
+  - **Manuscripts** (papers): `schema.py` (ManuscriptSpec, YAML loading, `defaults_from` render.yml merging), `assembly.py` (section ordering, frontmatter stripping, concatenation), `render.py` (pandoc + citeproc rendering), `figures.py` (figio figure resolution), `validate.py` (section/citation/figure/pandoc validation). Manuscripts live under `docs/manuscript/<name>/`
+  - **Master documents** (plans, specs): `master.py` (dual-marker `[[wikilink]]` + `{% include-markdown %}` documents). Uses Lua transclusion filter for Pandoc, include-markdown + ezlinks plugins for MkDocs. Master docs live at `docs/<name>/master.md`
+- **mcp/** — FastMCP server package (optional, requires `fastmcp`). Exposes all notio operations as MCP tools. Uses `NOTIO_ROOT` env var for project root resolution. Includes manuscript tools (`manuscript_init`, `manuscript_list`, `manuscript_status`, `manuscript_build`, `manuscript_validate`, `manuscript_assemble`, `manuscript_figure_insert`) and master document tools (`master_list`, `master_build`, `master_generate`)
 
 Default note types are four core types: **idea**, **issue**, **task**, **meeting** (all event mode). Projects can add custom types (including period-mode types like `daily`, `weekly`) via `notio.toml`.
 

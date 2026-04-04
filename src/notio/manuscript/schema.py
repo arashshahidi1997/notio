@@ -57,7 +57,7 @@ class ResolvedRender:
 
     bib_file: str = ""
     csl: str = ""
-    pdf_engine: str = "xelatex"
+    pdf_engine: str = "lualatex"
     lua_filter: str = ""
     conda_env: str = ""
     resource_path: list[str] = field(default_factory=list)
@@ -78,7 +78,7 @@ class ManuscriptSpec:
     bibliography: BibConfig = field(default_factory=BibConfig)
     figures: FiguresConfig = field(default_factory=FiguresConfig)
     render: RenderConfig = field(default_factory=RenderConfig)
-    defaults_from: str = "../../.projio/render.yml"
+    defaults_from: str = "../../../.projio/render.yml"
 
     @classmethod
     def from_yaml(cls, path: Path) -> ManuscriptSpec:
@@ -140,7 +140,7 @@ class ManuscriptSpec:
             bibliography=bib,
             figures=figures,
             render=render_cfg,
-            defaults_from=data.get("defaults_from", "../../.projio/render.yml"),
+            defaults_from=data.get("defaults_from", "../../../.projio/render.yml"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -184,13 +184,29 @@ class ManuscriptSpec:
         return result
 
 
-def _load_project_render_yml(path: Path) -> dict[str, Any]:
-    """Load .projio/render.yml as a plain dict. Returns {} if not found."""
+def _load_project_render_yml(root: Path) -> dict[str, Any]:
+    """Load .projio/render.yml from *root* as a plain dict. Returns {} if not found."""
     import yaml
 
+    path = root / ".projio" / "render.yml"
     if not path.is_file():
         return {}
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def _rerelativize(path_str: str, project_root: Path, base_dir: Path) -> str:
+    """Convert a project-root-relative path to be relative to base_dir.
+
+    If *path_str* is empty, return as-is.
+    """
+    if not path_str:
+        return path_str
+    abs_path = (project_root / path_str).resolve()
+    try:
+        import os
+        return os.path.relpath(abs_path, base_dir.resolve())
+    except ValueError:
+        return str(abs_path)
 
 
 def resolve_render_config(spec: ManuscriptSpec, base_dir: Path) -> ResolvedRender:
@@ -198,17 +214,45 @@ def resolve_render_config(spec: ManuscriptSpec, base_dir: Path) -> ResolvedRende
 
     Priority: manuscript.yml values win when non-empty, otherwise fall back
     to project defaults from .projio/render.yml.
+
+    Project root is discovered by walking up from *base_dir* looking for
+    ``.git`` or ``.projio/``, so ``defaults_from`` relative path depth
+    doesn't matter for correctness.
+
+    Paths inherited from render.yml are re-relativized so they resolve
+    correctly from *base_dir* (the manuscript directory), not the project root.
     """
     project_defaults: dict[str, Any] = {}
-    if spec.defaults_from:
-        render_yml_path = (base_dir / spec.defaults_from).resolve()
-        project_defaults = _load_project_render_yml(render_yml_path)
+    from notio.repo import repo_root
+    project_root = repo_root(base_dir)
 
-    # Resolve bibliography: manuscript wins if non-empty
-    bib_file = spec.bibliography.bib_file or project_defaults.get("bibliography", "")
-    csl = spec.bibliography.csl or project_defaults.get("csl", "")
-    pdf_engine = project_defaults.get("pdf_engine", "xelatex")
-    lua_filter = project_defaults.get("lua_filter", "")
+    if project_root:
+        project_defaults = _load_project_render_yml(project_root)
+    elif spec.defaults_from:
+        # Fallback: use defaults_from as explicit path
+        render_yml_path = (base_dir / spec.defaults_from).resolve()
+        if render_yml_path.is_file():
+            import yaml
+            project_defaults = yaml.safe_load(
+                render_yml_path.read_text(encoding="utf-8")
+            ) or {}
+            project_root = render_yml_path.parent.parent
+
+    def _resolve_path(manuscript_val: str, default_key: str) -> str:
+        """Pick manuscript value if set, else re-relativize the project default."""
+        if manuscript_val:
+            return manuscript_val  # already relative to base_dir
+        raw = project_defaults.get(default_key, "")
+        if raw and project_root:
+            return _rerelativize(raw, project_root, base_dir)
+        return raw
+
+    bib_file = _resolve_path(spec.bibliography.bib_file, "bibliography")
+    csl = _resolve_path(spec.bibliography.csl, "csl")
+    lua_filter_raw = project_defaults.get("lua_filter", "")
+    lua_filter = _rerelativize(lua_filter_raw, project_root, base_dir) if (lua_filter_raw and project_root) else lua_filter_raw
+
+    pdf_engine = project_defaults.get("pdf_engine", "lualatex")
     conda_env = project_defaults.get("conda_env", "")
     resource_path = project_defaults.get("resource_path", [])
 
@@ -265,7 +309,7 @@ def scaffold_spec(name: str, base_dir: Path) -> ManuscriptSpec:
         entries.append(SectionEntry(key=key, path=rel, order=order))
 
     # Check if project-level render.yml exists
-    defaults_from = "../../.projio/render.yml"
+    defaults_from = "../../../.projio/render.yml"
     render_yml_path = (base_dir / defaults_from).resolve()
     has_project_render = render_yml_path.is_file()
 

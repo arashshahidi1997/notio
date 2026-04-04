@@ -13,6 +13,9 @@ authors = [
 ]
 license = "MIT"
 license-files = ["LICENSE"]
+dependencies = [
+  "pyyaml>=6.0",
+]
 keywords = ["notes", "markdown", "cli", "templates", "logs"]
 classifiers = [
   "Development Status :: 3 - Alpha",

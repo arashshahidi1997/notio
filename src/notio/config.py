@@ -35,6 +35,13 @@ template = "meeting.md"
 filename = "meeting-{owner}-{timestamp}.md"
 toc_keys = ["participants"]
 
+[types.result]
+mode = "event"
+template = "result.md"
+filename = "result-{owner}-{timestamp}.md"
+toc_keys = ["question", "milestone", "metric", "confidence"]
+toc_groupby = "series"
+
 # [diataxis]
 # docs_root = "docs"
 # sections = ["tutorials", "how-to", "explanation", "reference"]

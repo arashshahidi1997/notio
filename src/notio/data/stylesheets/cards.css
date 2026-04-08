@@ -1,0 +1,24 @@
+/* notio note-card feed — applied to docs/log/ index pages.
+ * Works with mkdocs-material; degrades gracefully on plain mkdocs. */
+
+/* Card title link */
+.note-card-title {
+  font-size: 1.05em;
+  text-decoration: none;
+  color: var(--md-typeset-a-color, #2094f3);
+}
+.note-card-title:hover {
+  text-decoration: underline;
+}
+
+/* Metadata chips row */
+.md-typeset small {
+  color: var(--md-default-fg-color--light, #757575);
+  font-size: 0.82em;
+}
+
+/* Horizontal rule between cards — thin, subtle */
+.md-typeset hr {
+  margin: 0.6em 0 1em 0;
+  border-top: 1px solid var(--md-default-fg-color--lightest, #e0e0e0);
+}

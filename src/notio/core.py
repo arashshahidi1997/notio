@@ -440,6 +440,42 @@ def _entry_label(path: Path, metadata: dict[str, Any], keys: tuple[str, ...]) ->
     return f"{path.stem} {extras}".rstrip()
 
 
+def _note_card(path: Path, meta: dict[str, Any], note_name: str) -> list[str]:
+    """Render a single note as a card block for the type index.
+
+    Produces a definition-list style card with title, metadata chips,
+    and an opening snippet.  Styled via ``docs/log/stylesheets/cards.css``
+    (or mkdocs-material defaults).
+    """
+    title = str(meta.get("title", path.stem)).strip().strip('"')
+    # Strip leading markdown heading markers from titles
+    title = re.sub(r"^#+\s*", "", title).strip()
+    if not title or title == path.stem:
+        title = path.stem.replace("-", " ").replace("_", " ").title()
+
+    # Metadata chips
+    chips: list[str] = []
+    for key in ("date", "created", "status", "series", "confidence"):
+        val = _format_meta_value(meta.get(key))
+        if val:
+            chips.append(f"**{key}:** {val}")
+    tags = meta.get("tags")
+    if tags:
+        tag_str = ", ".join(str(t) for t in tags) if isinstance(tags, list) else str(tags)
+        if tag_str and tag_str != f"[{note_name}]":
+            chips.append(f"**tags:** {tag_str}")
+
+    lines: list[str] = []
+    lines.append(f"[**{title}**]({path.name}){{ .note-card-title }}")
+    lines.append("")
+    if chips:
+        lines.append(f"<small>{' · '.join(chips)}</small>")
+        lines.append("")
+    lines.append("---")
+    lines.append("")
+    return lines
+
+
 def build_type_index(config: Config, note_name: str) -> Path:
     note_type = config.note_types[note_name]
     folder = config.notes_root / note_name
@@ -461,17 +497,14 @@ def build_type_index(config: Config, note_name: str) -> Path:
             group = _format_meta_value(meta.get(note_type.toc_groupby)) or "unset"
             grouped.setdefault(group, []).append((path, meta))
         for group in sorted(grouped):
-            lines.append(f"## {note_type.toc_groupby}: {group}")
+            lines.append(f"## {group}")
             lines.append("")
             for path, meta in grouped[group]:
-                lines.append(f"- [{_entry_label(path, meta, note_type.toc_keys)}]({path.name})")
-            lines.append("")
+                lines.extend(_note_card(path, meta, note_name))
     else:
-        lines.append("## Contents")
-        lines.append("")
         for path in files:
             meta = parse_frontmatter(path.read_text(encoding="utf-8"))
-            lines.append(f"- [{_entry_label(path, meta, note_type.toc_keys)}]({path.name})")
+            lines.extend(_note_card(path, meta, note_name))
     lines.append("")
     index_path = folder / "index.md"
     index_path.write_text("\n".join(lines), encoding="utf-8")

@@ -23,27 +23,63 @@ INCLUDE_RE = re.compile(
 )
 
 
-def find_master_files(root: Path) -> list[dict[str, Any]]:
-    """Scan for docs/*/master.md files.
+def _parse_master_frontmatter(text: str) -> dict[str, Any]:
+    """Extract YAML frontmatter from a master document."""
+    fm_match = re.match(r"\A---\s*\n(.*?)\n---\s*\n?", text, re.DOTALL)
+    if not fm_match:
+        return {}
+    try:
+        import yaml
+        return yaml.safe_load(fm_match.group(1)) or {}
+    except Exception:
+        return {}
 
-    Returns a list of dicts with keys: name, path, section_count.
+
+def find_master_files(root: Path, *, require_frontmatter: bool = False) -> list[dict[str, Any]]:
+    """Scan for ``docs/**/master.md`` files recursively.
+
+    Only includes files whose frontmatter contains ``type: master``.
+    Legacy master.md files without frontmatter are included when
+    *require_frontmatter* is False (default) for backwards compatibility.
+
+    Returns a list of dicts with keys: name, path, section_root,
+    section_count, nav_include, and any other frontmatter fields.
     """
     docs_dir = root / "docs"
     if not docs_dir.is_dir():
         return []
     masters = []
-    for child in sorted(docs_dir.iterdir()):
-        if not child.is_dir() or child.name.startswith("."):
+    for master_path in sorted(docs_dir.rglob(MASTER_FILENAME)):
+        if not master_path.is_file():
             continue
-        master_path = child / MASTER_FILENAME
-        if master_path.is_file():
-            text = master_path.read_text(encoding="utf-8")
-            sections = INCLUDE_RE.findall(text)
-            masters.append({
-                "name": child.name,
-                "path": str(master_path.relative_to(root)),
-                "section_count": len(sections),
-            })
+        # Determine section root: first dir component under docs/
+        rel = master_path.relative_to(docs_dir)
+        section_root = rel.parts[0] if len(rel.parts) > 1 else rel.stem
+        # Skip hidden/internal directories
+        if any(p.startswith(".") or p.startswith("_") for p in rel.parts[:-1]):
+            continue
+
+        text = master_path.read_text(encoding="utf-8")
+        fm = _parse_master_frontmatter(text)
+
+        # Filter: require type: master in frontmatter
+        if fm.get("type") != "master":
+            if require_frontmatter:
+                continue
+            # Legacy compat: accept files without frontmatter only at depth 1
+            if len(rel.parts) != 2:
+                continue
+
+        sections = INCLUDE_RE.findall(text)
+        entry: dict[str, Any] = {
+            "name": section_root,
+            "path": str(master_path.relative_to(root)),
+            "section_root": section_root,
+            "section_count": len(sections),
+            "nav_include": fm.get("nav_include", True),
+        }
+        entry.update(fm)
+        masters.append(entry)
     return masters
 
 

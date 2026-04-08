@@ -525,6 +525,6 @@ def test_default_templates_have_series_and_refs(tmp_path: Path) -> None:
     assert "refs" in meta
 
 
-def test_default_config_has_four_types(tmp_path: Path) -> None:
+def test_default_config_has_five_types(tmp_path: Path) -> None:
     config = load_config(tmp_path)
-    assert set(config.note_types.keys()) == {"idea", "issue", "task", "meeting"}
+    assert set(config.note_types.keys()) == {"idea", "issue", "task", "meeting", "result"}

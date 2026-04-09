@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "notio"
-version = "0.1.0"
+version = "0.1.1"
 description = "Lightweight project-agnostic CLI for templated notes and log indexes"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
-  { name = "Arash Shahidi" }
+  { name = "Arash Shahidi", email = "A.Shahidi@campus.lmu.de" }
 ]
 license = "MIT"
 license-files = ["LICENSE"]
@@ -23,12 +23,14 @@ classifiers = [
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
   "Topic :: Office/Business :: Groupware",
   "Topic :: Text Processing :: Markup :: Markdown",
 ]
 
 [project.urls]
 Homepage = "https://github.com/arashshahidi1997/notio"
+Documentation = "https://arashshahidi1997.github.io/notio/"
 Repository = "https://github.com/arashshahidi1997/notio"
 Issues = "https://github.com/arashshahidi1997/notio/issues"
 

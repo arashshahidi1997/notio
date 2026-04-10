@@ -35,6 +35,13 @@ filename = "result-{owner}-{timestamp}.md"
 toc_keys = ["question", "milestone", "metric", "confidence"]
 toc_groupby = "series"
 
+[types.commit]
+mode = "event"
+template = "commit.md"
+filename = "commit-{owner}-{timestamp}.md"
+toc_keys = ["subsystem", "commit_hash"]
+toc_groupby = "series"
+
 # [diataxis]
 # docs_root = "docs"
 # sections = ["tutorials", "how-to", "explanation", "reference"]

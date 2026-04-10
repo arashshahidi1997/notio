@@ -16,7 +16,7 @@ from notio.config import load_config
 
 # Directories under docs/ that are handled by their own nav generators
 # and should be skipped by master_nav().
-_MANAGED_SECTIONS = {"log", "pipelines", "manuscript", "infra"}
+_MANAGED_SECTIONS = {"log", "pipelines", "manuscript", "plan", "infra"}
 
 
 # ---------------------------------------------------------------------------

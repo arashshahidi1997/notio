@@ -412,8 +412,8 @@ Current note:
 Other notes in this project:
 {siblings_desc}
 
-Return ONLY a JSON object:
-{{"links": [{{"target": "<filename.md>", "reason": "<brief reason for linking>"}}]}}
+Return ONLY a JSON object with targets as exact filenames (with .md extension):
+{{"links": [{{"target": "issue-arash-20260211-143022-123456.md", "reason": "<brief reason for linking>"}}]}}
 
 Only suggest links where there is a genuine topical connection. Return an empty list if nothing is related. Maximum 5 links."""
 
@@ -425,7 +425,18 @@ Only suggest links where there is a genuine topical connection. Return an empty 
     if result is None:
         return None
 
-    return result.get("links", [])
+    links = result.get("links", [])
+    # Normalise targets: strip directory prefixes and ensure .md extension
+    for link in links:
+        target = link.get("target", "")
+        # Use only the filename part (strip any path prefix)
+        if "/" in target:
+            target = target.rsplit("/", 1)[-1]
+        # Ensure .md extension
+        if not target.endswith(".md"):
+            target = target + ".md"
+        link["target"] = target
+    return links
 
 
 # ---------------------------------------------------------------------------

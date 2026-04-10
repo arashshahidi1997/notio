@@ -35,7 +35,11 @@ notio note meeting --title "Design review"
 notio toc [TYPE] [--all]
 ```
 
-Regenerates index files without creating notes.
+Regenerates index files without creating notes. Each type index is rendered
+as a card feed with metadata chips. Types that define `toc_groupby` get
+ordered group headings with counts, and closed groups (`done`, `cancelled`,
+`resolved`) are collapsed by default. See [Maintain Indexes](../how-to/indexes.md)
+for details on card styling and group ordering.
 
 ## `notio diataxis init`
 

@@ -440,6 +440,32 @@ def _entry_label(path: Path, metadata: dict[str, Any], keys: tuple[str, ...]) ->
     return f"{path.stem} {extras}".rstrip()
 
 
+def _remote_url(note_path: Path, remote: str) -> str | None:
+    """Resolve ``github#42`` or ``gitlab#15`` to a full issue URL.
+
+    Uses :func:`notio.remote.detect_platform` to find the repo URL.
+    Returns ``None`` if the platform or repo cannot be determined.
+    """
+    m = re.match(r"(github|gitlab)#(\d+)", remote)
+    if not m:
+        return None
+    platform_name, number = m.group(1), m.group(2)
+
+    try:
+        from notio.remote import detect_platform
+        platform = detect_platform(note_path.parent)
+    except Exception:
+        return None
+    if not platform:
+        return None
+
+    if platform_name == "github":
+        host = platform.host or "github.com"
+        return f"https://{host}/{platform.owner_repo}/issues/{number}"
+    host = platform.host or "gitlab.com"
+    return f"https://{host}/{platform.owner_repo}/-/issues/{number}"
+
+
 def _note_card(path: Path, meta: dict[str, Any], note_name: str) -> list[str]:
     """Render a single note as a card block for the type index.
 
@@ -459,6 +485,14 @@ def _note_card(path: Path, meta: dict[str, Any], note_name: str) -> list[str]:
         val = _format_meta_value(meta.get(key))
         if val:
             chips.append(f"**{key}:** {val}")
+    remote = meta.get("remote")
+    if remote:
+        remote_str = str(remote).strip()
+        url = _remote_url(path, remote_str)
+        if url:
+            chips.append(f"**remote:** [{remote_str}]({url})")
+        else:
+            chips.append(f"**remote:** {remote_str}")
     tags = meta.get("tags")
     if tags:
         tag_str = ", ".join(str(t) for t in tags) if isinstance(tags, list) else str(tags)
@@ -474,6 +508,25 @@ def _note_card(path: Path, meta: dict[str, Any], note_name: str) -> list[str]:
     lines.append("---")
     lines.append("")
     return lines
+
+
+_COLLAPSED_GROUPS = {"done", "cancelled", "resolved"}
+"""Groups rendered as collapsed ``<details>`` blocks (requires pymdownx.details)."""
+
+_GROUP_ORDER = ["open", "pending", "in_progress", "scheduled", "partial"]
+"""Active groups shown first, in this order.  Unlisted groups appear after these
+(sorted alphabetically) but before collapsed groups."""
+
+
+def _group_sort_key(name: str) -> tuple[int, str]:
+    """Return a sort key that puts active groups first, collapsed groups last."""
+    low = name.lower()
+    if low in _COLLAPSED_GROUPS:
+        return (2, low)
+    try:
+        return (0, str(_GROUP_ORDER.index(low)))
+    except ValueError:
+        return (1, low)
 
 
 def build_type_index(config: Config, note_name: str) -> Path:
@@ -496,11 +549,18 @@ def build_type_index(config: Config, note_name: str) -> Path:
             meta = parse_frontmatter(path.read_text(encoding="utf-8"))
             group = _format_meta_value(meta.get(note_type.toc_groupby)) or "unset"
             grouped.setdefault(group, []).append((path, meta))
-        for group in sorted(grouped):
-            lines.append(f"## {group}")
+        for group in sorted(grouped, key=_group_sort_key):
+            count = len(grouped[group])
+            if group.lower() in _COLLAPSED_GROUPS:
+                lines.append(f'??? note "{group} ({count})"')
+            else:
+                lines.append(f"## {group} ({count})")
             lines.append("")
             for path, meta in grouped[group]:
-                lines.extend(_note_card(path, meta, note_name))
+                card = _note_card(path, meta, note_name)
+                if group.lower() in _COLLAPSED_GROUPS:
+                    card = [f"    {line}" for line in card]
+                lines.extend(card)
     else:
         for path in files:
             meta = parse_frontmatter(path.read_text(encoding="utf-8"))

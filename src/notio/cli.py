@@ -180,6 +180,30 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--format", default="pdf", choices=["pdf", "latex", "md", "docx", "html"],
                    help="Output format (default: pdf)")
 
+    # -- promote --
+    p = sub.add_parser("promote", help="Promote a note to a platform issue")
+    p.add_argument("note_path", help="Relative path to the note file")
+    p.add_argument("--labels", nargs="*", help="Issue labels (default: from note tags)")
+    p.add_argument("--assignee", default="", help="Issue assignee")
+    p.add_argument("--milestone", default="", help="Issue milestone")
+    p.add_argument("--dry-run", action="store_true", help="Show what would be created")
+
+    # -- capture --
+    p = sub.add_parser("capture", help="Create a note from a platform issue")
+    p.add_argument("remote", help="Remote reference (e.g. github#42)")
+    p.add_argument("--type", default="issue", dest="note_type", help="Note type to create")
+    p.add_argument("--owner", default="", help="Note owner")
+
+    # -- pull --
+    p = sub.add_parser("pull", help="Fetch remote thread updates for linked notes")
+    p.add_argument("note_path", nargs="?", default="", help="Path to a specific note")
+    p.add_argument("--type", default="", dest="note_type", help="Pull all linked notes of this type")
+    p.add_argument("--all", action="store_true", dest="pull_all", help="Pull all linked notes")
+    p.add_argument("--dry-run", action="store_true", help="Show what would be updated")
+
+    # -- remote-status --
+    sub.add_parser("remote-status", help="List notes linked to platform issues")
+
     # -- mcp --
     sub.add_parser("mcp", help="Start the FastMCP server (stdio)")
 
@@ -253,6 +277,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "llm":
         return _cmd_llm(root)
 
+    # -- promote --
+    if args.command == "promote":
+        return _cmd_promote(args, root)
+
+    # -- capture --
+    if args.command == "capture":
+        return _cmd_capture(args, root)
+
+    # -- pull --
+    if args.command == "pull":
+        return _cmd_pull(args, root)
+
+    # -- remote-status --
+    if args.command == "remote-status":
+        return _cmd_remote_status(root)
+
     # -- mcp --
     if args.command == "mcp":
         import os
@@ -289,6 +329,78 @@ def main(argv: list[str] | None = None) -> int:
 
     parser.print_help(sys.stderr)
     return 2
+
+
+# ---------------------------------------------------------------------------
+# Remote commands
+# ---------------------------------------------------------------------------
+
+
+def _cmd_promote(args: argparse.Namespace, root: Path) -> int:
+    import json
+    from notio.remote import promote
+    try:
+        result = promote(
+            root, args.note_path,
+            labels=args.labels,
+            assignee=args.assignee,
+            milestone=args.milestone,
+            dry_run=args.dry_run,
+        )
+        print(json.dumps(result, indent=2))
+        return 0
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+
+def _cmd_capture(args: argparse.Namespace, root: Path) -> int:
+    import json
+    from notio.remote import capture
+    try:
+        result = capture(
+            root, args.remote,
+            note_type=args.note_type,
+            owner=args.owner,
+        )
+        print(json.dumps(result, indent=2))
+        return 0
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+
+def _cmd_pull(args: argparse.Namespace, root: Path) -> int:
+    import json
+    from notio.remote import pull
+    try:
+        result = pull(
+            root,
+            note_path=args.note_path,
+            note_type=args.note_type,
+            all_notes=args.pull_all,
+            dry_run=args.dry_run,
+        )
+        print(json.dumps(result, indent=2))
+        return 0
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+
+def _cmd_remote_status(root: Path) -> int:
+    import json
+    from notio.remote import remote_status
+    try:
+        result = remote_status(root)
+        for entry in result["notes"]:
+            print(f"{entry['type']:10s} {entry['path']:60s} {entry['remote']:15s} {entry.get('status', '')}")
+        if not result["notes"]:
+            print("No notes linked to remote issues.")
+        return 0
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
 
 # ---------------------------------------------------------------------------

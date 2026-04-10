@@ -53,7 +53,7 @@ Source modules in `src/notio/`:
 
 - **cli.py** — argparse command router, entry point (`notio.cli:main`)
 - **config.py** — TOML config loading into dataclasses. Config precedence: `notio.toml` > `[tool.notio]` in `pyproject.toml` > hardcoded defaults
-- **core.py** — Note business logic: template rendering (`string.Template` with `${variable}` syntax), frontmatter parsing (regex + YAML), note file creation, and index generation
+- **core.py** — Note business logic: template rendering (`string.Template` with `${variable}` syntax), frontmatter parsing (regex + YAML), note file creation, and index generation. Indexes use a card feed layout (title link + metadata chips + separator) styled via `data/stylesheets/cards.css`. Grouped indexes order active groups first and collapse closed groups (`done`/`cancelled`/`resolved`) using `pymdownx.details`
 - **diataxis.py** — Diataxis documentation scaffolding: section templates, page creation, and section index generation. Reuses `core.parse_frontmatter`
 - **query.py** — Read-only note query functions (`list_notes`, `latest_note`, `read_note`). Exported from `notio.__init__` for library use by projio
 - **manuscript/** — Manuscript assembly subpackage. Two document types:

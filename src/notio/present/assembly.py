@@ -29,7 +29,9 @@ __all__ = [
     "local_resolver",
     "load_sections",
     "assemble_marp",
+    "assemble_pandoc",
     "write_assembled",
+    "write_assembled_pandoc",
     "strip_frontmatter",
     "adjust_headings",
     "FRONTMATTER_RE",
@@ -177,14 +179,102 @@ def assemble_marp(spec: DeckSpec, base_dir: Path) -> str:
     return text
 
 
+def _build_pandoc_frontmatter(spec: DeckSpec) -> str:
+    """Build a pandoc YAML metadata block from a DeckSpec.
+
+    Pandoc frontmatter is semantically different from Marp's — it carries
+    document metadata (title, author, date) that citeproc and templates
+    consume. Does NOT include Marp-specific keys.
+    """
+    lines: list[str] = ["---"]
+    if spec.title:
+        lines.append(f'title: "{_escape_quotes(spec.title)}"')
+    if spec.subtitle:
+        lines.append(f'subtitle: "{_escape_quotes(spec.subtitle)}"')
+    if spec.author:
+        lines.append("author:")
+        for author in spec.author:
+            if author.affiliation:
+                lines.append(
+                    f'  - name: "{_escape_quotes(author.name)}"\n'
+                    f'    affiliation: "{_escape_quotes(author.affiliation)}"'
+                )
+            else:
+                lines.append(f'  - "{_escape_quotes(author.name)}"')
+    if spec.date:
+        lines.append(f'date: "{_escape_quotes(str(spec.date))}"')
+    if spec.venue:
+        lines.append(f'venue: "{_escape_quotes(spec.venue)}"')
+    # Reveal.js-specific metadata (pandoc reads these via -V or frontmatter
+    # when format: revealjs is used at render time).
+    if spec.render.theme and spec.render.theme != "default":
+        lines.append(f"theme: {spec.render.theme}")
+    if spec.render.ratio:
+        # pandoc-revealjs uses width/height, but we pass ratio through as a
+        # custom variable that the renderer can expand via -V if desired.
+        lines.append(f"ratio: {spec.render.ratio}")
+    lines.append("---")
+    return "\n".join(lines)
+
+
+def assemble_pandoc(spec: DeckSpec, base_dir: Path) -> str:
+    """Concatenate sections into a single pandoc-Markdown document.
+
+    Used by the reveal.js backend. Differs from :func:`assemble_marp`
+    in two ways:
+
+    1. Emits a **pandoc YAML metadata block** (title/author/date) instead
+       of a Marp frontmatter block.
+    2. Does not need a synthetic title slide — pandoc-revealjs uses the
+       frontmatter ``title:`` to render the first slide automatically
+       when the body doesn't start with a heading.
+
+    Same section join logic: ``\\n\\n---\\n\\n`` between sections;
+    intra-file ``---`` separators survive as slide breaks when pandoc
+    runs with ``--slide-level=0``.
+
+    Keeps raw ``@key`` citation markers intact — pandoc citeproc resolves
+    them natively at render time.
+    """
+    sections = load_sections(spec, base_dir)
+    frontmatter = _build_pandoc_frontmatter(spec)
+    parts: list[str] = [frontmatter]
+    for section in sections:
+        parts.append(section.content.rstrip())
+    text = parts[0] + "\n\n" + "\n\n---\n\n".join(parts[1:])
+    if not text.endswith("\n"):
+        text += "\n"
+    return text
+
+
 def write_assembled(spec: DeckSpec, base_dir: Path) -> Path:
     """Assemble and write to ``{render.output_dir}/assembled.md``.
 
-    Returns the path to the assembled file.
+    Dispatches by ``spec.format`` — Marp decks get ``assemble_marp``,
+    revealjs decks get ``assemble_pandoc``. The file name stays
+    ``assembled.md`` for both so downstream tooling (diff, status) can
+    locate it without knowing the format.
     """
     output_dir = base_dir / spec.render.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "assembled.md"
-    text = assemble_marp(spec, base_dir)
+    if spec.format == "revealjs":
+        text = assemble_pandoc(spec, base_dir)
+    else:
+        text = assemble_marp(spec, base_dir)
+    output_path.write_text(text, encoding="utf-8")
+    return output_path
+
+
+def write_assembled_pandoc(spec: DeckSpec, base_dir: Path) -> Path:
+    """Assemble via ``assemble_pandoc`` and write to ``assembled.md``.
+
+    Explicit companion to :func:`write_assembled` for callers that want
+    the pandoc form without relying on ``spec.format`` dispatch.
+    """
+    output_dir = base_dir / spec.render.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "assembled.md"
+    text = assemble_pandoc(spec, base_dir)
     output_path.write_text(text, encoding="utf-8")
     return output_path

@@ -11,9 +11,11 @@ from __future__ import annotations
 from notio.present.assembly import (
     Section,
     assemble_marp,
+    assemble_pandoc,
     load_sections,
     write_assembled,
 )
+from notio.present.render import render
 from notio.present.schema import (
     DeckFigure,
     DeckOutput,
@@ -30,6 +32,8 @@ __all__ = [
     "Section",
     "load_sections",
     "assemble_marp",
+    "assemble_pandoc",
     "write_assembled",
+    "render",
     "scaffold_deck",
 ]

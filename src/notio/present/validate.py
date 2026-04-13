@@ -86,9 +86,13 @@ def validate_deck(spec: DeckSpec, base_dir: Path) -> ValidationResult:
                 "Install with: npm install -g @marp-team/marp-cli"
             )
     elif spec.format == "revealjs":
-        result.warnings.append(
-            "Reveal.js backend lands in phase 3; build will currently fail."
-        )
+        from notio.manuscript.render import find_pandoc
+
+        if find_pandoc() is None:
+            result.warnings.append(
+                "pandoc not found on PATH — reveal.js rendering will fail. "
+                "Install pandoc >= 2.19."
+            )
 
     result.valid = len(result.errors) == 0
     return result

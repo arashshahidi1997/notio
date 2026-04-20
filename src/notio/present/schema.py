@@ -310,7 +310,7 @@ def scaffold_deck(
     Writes ``deck.yml`` at *base_dir* and one empty-body section file per
     entry in the chosen template under ``base_dir/sections/``. Section files
     include a notio-compatible frontmatter so notio indexing can pick them
-    up once ``docs/presentations/`` is added to the indexed paths.
+    up once ``docs/deliverables/presentations/`` is added to the indexed paths.
 
     Returns the spec.
     """

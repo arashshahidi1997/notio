@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -11,9 +12,29 @@ from notio.manuscript.schema import ManuscriptSpec, resolve_render_config
 
 
 def find_pandoc() -> Path | None:
-    """Locate the pandoc binary via PATH lookup."""
+    """Locate the pandoc binary.
+
+    Tries (in order):
+    1. ``shutil.which("pandoc")`` — standard PATH lookup
+    2. ``~/.pixi/bin/pandoc`` — pixi-global install (when exposed via the
+       quarto env or a dedicated pandoc env)
+    3. ``~/.local/bin/pandoc`` — user-level install or symlink
+
+    The fallbacks make pandoc resolvable in non-interactive contexts (MCP
+    servers, hooks, CI) where the parent shell may not have sourced the
+    user's rc files. Returns ``None`` only when pandoc is genuinely
+    unavailable.
+    """
     result = shutil.which("pandoc")
-    return Path(result) if result else None
+    if result:
+        return Path(result)
+
+    home = Path.home()
+    for candidate in (home / ".pixi" / "bin" / "pandoc", home / ".local" / "bin" / "pandoc"):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return candidate
+
+    return None
 
 
 def build_pandoc_command(

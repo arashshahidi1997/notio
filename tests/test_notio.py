@@ -528,3 +528,15 @@ def test_default_templates_have_series_and_refs(tmp_path: Path) -> None:
 def test_default_config_has_five_types(tmp_path: Path) -> None:
     config = load_config(tmp_path)
     assert set(config.note_types.keys()) == {"idea", "issue", "task", "meeting", "result"}
+
+
+def test_root_index_links_only_existing_type_indexes(tmp_path):
+    """A configured note type without notes is not linked (mkdocs --strict would fail on it)."""
+    from notio.config import load_config
+    from notio.core import build_root_index, build_type_index
+    config = load_config(tmp_path)
+    names = sorted(config.note_types)
+    build_type_index(config, names[0])
+    text = build_root_index(config).read_text()
+    assert f"({names[0]}/index.md)" in text
+    assert all(f"({n}/index.md)" not in text for n in names[1:])

@@ -537,7 +537,7 @@ def build_type_index(config: Config, note_name: str) -> Path:
         [
             path
             for path in folder.iterdir()
-            if path.is_file() and path.name != "index.md" and path.name.startswith(note_name)
+            if path.is_file() and path.suffix == ".md" and path.name != "index.md" and path.name.startswith(note_name)
         ],
         reverse=True,
     )
@@ -572,9 +572,15 @@ def build_type_index(config: Config, note_name: str) -> Path:
 
 
 def build_root_index(config: Config) -> Path:
+    """The notes root index: a link per note type whose own index exists.
+
+    Configured types with no notes yet (no ``<type>/index.md``) are left out,
+    so the index never links a page that is not there (mkdocs --strict).
+    """
     lines = [f"# {ROOT_INDEX_TITLE}", "", "## Contents", ""]
     for note_name in sorted(config.note_types):
-        lines.append(f"- [{note_name.capitalize()}]({note_name}/index.md)")
+        if (config.notes_root / note_name / "index.md").is_file():
+            lines.append(f"- [{note_name.capitalize()}]({note_name}/index.md)")
     lines.append("")
     index_path = config.notes_root / "index.md"
     index_path.parent.mkdir(parents=True, exist_ok=True)
@@ -586,7 +592,7 @@ def init_workspace(config: Config, *, force: bool = False) -> list[Path]:
     created: list[Path] = []
     created.extend(ensure_note_dirs(config))
     created.extend(ensure_default_templates(config, force=force))
-    created.append(build_root_index(config))
     for note_name in config.note_types:
         created.append(build_type_index(config, note_name))
+    created.append(build_root_index(config))
     return created

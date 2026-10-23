@@ -248,9 +248,9 @@ def main(argv: list[str] | None = None) -> int:
     # -- toc --
     if args.command == "toc":
         if args.all or not args.type:
-            print(build_root_index(config))
             for note_name in config.note_types:
                 print(build_type_index(config, note_name))
+            print(build_root_index(config))
             return 0
         if args.type not in config.note_types:
             parser.error(f"Unknown note type: {args.type}")

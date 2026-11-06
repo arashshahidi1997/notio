@@ -2,7 +2,7 @@
 
 from fastmcp import FastMCP
 
-from .common import get_notio_root, json_dict
+from .common import get_notio_root, json_dict, parse_fields
 
 server = FastMCP("notio")
 
@@ -76,14 +76,15 @@ def note_search_tool(query: str, note_type: str = "", series: str = "", limit: i
 
 
 @server.tool("note_update")
-def note_update_tool(path: str, fields: str) -> dict:
-    """Update frontmatter fields of an existing note. Pass fields as a JSON string, e.g. '{"status": "done", "actionable": true}'."""
+def note_update_tool(path: str, fields: str | dict) -> dict:
+    """Update frontmatter fields of an existing note. Pass fields as a mapping, a JSON object string ('{"status": "done"}') or YAML ("status: done")."""
     try:
-        import json
         from notio.query import update_note_frontmatter
 
         root = get_notio_root()
-        parsed_fields = json.loads(fields)
+        parsed_fields = parse_fields(fields, "fields")
+        if not parsed_fields:
+            return {"error": "fields is empty: pass at least one field to update"}
         meta = update_note_frontmatter(root, path, parsed_fields)
         return json_dict({"path": path, "updated_fields": list(parsed_fields.keys()), "frontmatter": meta})
     except Exception as exc:
@@ -141,7 +142,7 @@ def note_create_tool(
     title: str = "",
     date: str = "",
     body: str = "",
-    frontmatter: str = "",
+    frontmatter: str | dict = "",
 ) -> dict:
     """Create a new note of the given type, optionally fully populated in one call.
 
@@ -155,17 +156,22 @@ def note_create_tool(
         date: Date override (YYYY-MM-DD).
         body: Markdown body to use instead of the template body.  Everything
             below the frontmatter closing ``---`` is replaced with this text.
-        frontmatter: JSON string of frontmatter fields to set/override,
-            e.g. '{"tags": ["result"], "series": "preprocess", "refs": [{"note": "idea-arash-20260211"}]}'.
+        frontmatter: Frontmatter fields to set/override, as a mapping, a JSON
+            object string, e.g. '{"tags": ["result"], "series": "preprocess"}',
+            or a YAML string, e.g. "series: preprocess\ntags: [result]".
     """
     try:
-        import json as _json
+        extra_fm = parse_fields(frontmatter, "frontmatter")
+    except ValueError as exc:
+        return {"error": str(exc)}
+    try:
+        import re
+
         from notio.config import load_config
         from notio.core import create_note
 
         root = get_notio_root()
         config = load_config(root)
-        extra_fm: dict | None = _json.loads(frontmatter) if frontmatter else None
         path = create_note(
             config,
             note_type,
@@ -175,7 +181,13 @@ def note_create_tool(
             body=body or None,
             extra_frontmatter=extra_fm,
         )
-        return json_dict({"path": str(path.relative_to(root)), "type": note_type})
+        path = root / path
+        match = re.search(r"\d{8}-\d{6}-\d{6}", path.stem)
+        return json_dict({
+            "path": str(path.relative_to(root)),
+            "id": match.group(0) if match else path.stem,
+            "type": note_type,
+        })
     except Exception as exc:
         return json_dict({"error": str(exc)})
 

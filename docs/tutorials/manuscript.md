@@ -324,7 +324,7 @@ pdf_engine: lualatex
 csl: bib/csl/nature.csl
 bibliography: bib/project.bib
 lua_filter: .projio/filters/include.lua
-conda_env: labpy
+render_env: ""          # pixi env for pandoc (empty = default env)
 resource_path: [., docs, docs/assets, bib]
 ```
 

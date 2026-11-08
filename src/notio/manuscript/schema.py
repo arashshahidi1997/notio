@@ -59,7 +59,7 @@ class ResolvedRender:
     csl: str = ""
     pdf_engine: str = "lualatex"
     lua_filter: str = ""
-    conda_env: str = ""
+    render_env: str = ""  # pixi env for pandoc; legacy render.yml key: conda_env
     resource_path: list[str] = field(default_factory=list)
     # Manuscript-specific settings carried through
     output_dir: str = "_build/"
@@ -253,7 +253,7 @@ def resolve_render_config(spec: ManuscriptSpec, base_dir: Path) -> ResolvedRende
     lua_filter = _rerelativize(lua_filter_raw, project_root, base_dir) if (lua_filter_raw and project_root) else lua_filter_raw
 
     pdf_engine = project_defaults.get("pdf_engine", "lualatex")
-    conda_env = project_defaults.get("conda_env", "")
+    render_env = project_defaults.get("render_env", "") or project_defaults.get("conda_env", "")
     resource_path = project_defaults.get("resource_path", [])
 
     return ResolvedRender(
@@ -261,7 +261,7 @@ def resolve_render_config(spec: ManuscriptSpec, base_dir: Path) -> ResolvedRende
         csl=csl,
         pdf_engine=pdf_engine,
         lua_filter=lua_filter,
-        conda_env=conda_env,
+        render_env=render_env,
         resource_path=resource_path,
         output_dir=spec.render.output_dir,
         formats=spec.render.formats,

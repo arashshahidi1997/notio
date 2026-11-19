@@ -8,7 +8,7 @@ __all__ = [
     "update_note_frontmatter",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"  # single source: pyproject.toml reads it
 
 from notio.query import (
     latest_note,

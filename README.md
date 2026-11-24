@@ -22,6 +22,9 @@ pip install notio
 
 The source of truth is the Python CLI plus `notio.toml`. Make wrappers are optional convenience only.
 
+The `notio.present` subpackage (slide decks) is **deprecated** and is removed after the next notio release:
+write decks as Quarto reveal.js (`format: revealjs`) instead. See [Scope](docs/explanation/scope.md#subpackages).
+
 ## MCP server
 
 Notio includes an optional MCP server (`pip install notio[mcp]`) that exposes note operations as tools for AI agents:

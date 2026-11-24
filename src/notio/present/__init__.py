@@ -5,8 +5,21 @@ tree + Marp renderer (phase 1). Reveal.js and cross-project imports land
 in later phases.
 
 See docs/specs/presentio/presentio.md for the full design.
+
+Deprecated (2026-11-24): notio.present is removed after the next notio release.
+Write new decks as Quarto reveal.js (``format: revealjs``); in projio the
+``quarto-talks`` skill does this.
 """
 from __future__ import annotations
+
+import warnings
+
+warnings.warn(
+    "notio.present is deprecated and will be removed after the next notio release; "
+    "write decks as Quarto reveal.js (format: revealjs, the quarto-talks skill in projio).",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from notio.present.assembly import (
     Section,

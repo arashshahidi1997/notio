@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Deprecated
+- `notio.present` (slide decks): importing it raises a `DeprecationWarning`, and it is removed after the next notio release. Write decks as Quarto reveal.js (`format: revealjs`); in projio the `quarto-talks` skill does this. projio's `present_*` MCP tools are opt-in until the removal.
+
 ## 0.2.0 (2026-11-19)
 
 ### Added
